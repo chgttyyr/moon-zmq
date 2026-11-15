@@ -122,3 +122,77 @@ async fn TransportHub::send_round_robin_with_pipe(
   raise Closed
 }
 
+///|
+/// Send a message from a `ROUTER` socket using the first frame as the destination
+/// `peer_identity` (RFC 28 Section 2.2).
+///
+/// Strips the routing ID frame and routes the remaining message frames to the
+/// matching peer `Pipe`. If no matching pipe exists or if the pipe queue is full:
+/// - If `router_mandatory` is true, raises `Unroutable(target_id)` or `HighWaterMarkReached`.
+/// - Otherwise, silently drops the message per RFC 28 default behavior.
+async fn TransportHub::send_router(
+  self : TransportHub,
+  msg : Message,
+  policy? : HwmPolicy = BlockOnFull,
+) -> Unit raise ZmqError {
+  if msg.frames.length() < 2 {
+    if self.options.router_mandatory {
+      raise ProtocolError("ROUTER outgoing message must contain at least identity + 1 frame")
+    }
+    return
+  }
+  let target_id = msg.frames[0]
+  let payload_frames : Array[Bytes] = Array(capacity=msg.frames.length() - 1)
+  for i = 1; i < msg.frames.length(); i = i + 1 {
+    payload_frames.push(msg.frames[i])
+  }
+  let payload_msg = Message::multipart(payload_frames)
+
+  // Find destination pipe
+  let mut target_pipe : Pipe? = None
+  for p in self.pipes {
+    if p.peer_identity == target_id && p.is_open() {
+      target_pipe = Some(p)
+      break
+    }
+  }
+
+  match target_pipe {
+    Some(pipe) => {
+      let sent = pipe.send_message(payload_msg, policy~) catch {
+        HighWaterMarkReached =>
+          if self.options.router_mandatory {
+            raise HighWaterMarkReached
+          } else {
+            return
+          }
+        err => raise err
+      }
+      if !sent && self.options.router_mandatory {
+        raise HighWaterMarkReached
+      }
+    }
+    None => {
+      if self.options.router_mandatory {
+        raise Unroutable(target_id)
+      }
+    }
+  }
+}
+
+///|
+/// Receive a message on a `ROUTER` socket (RFC 28 Section 2.2).
+/// Prepends the peer's routing identity as the first frame of the returned message.
+async fn TransportHub::recv_router(
+  self : TransportHub,
+) -> Message raise ZmqError {
+  let (pipe, raw) = self.recv_fair_queue()
+  let out_frames : Array[Bytes] = Array(capacity=raw.frames.length() + 1)
+  out_frames.push(pipe.peer_identity)
+  for f in raw.frames {
+    out_frames.push(f)
+  }
+  Message::multipart(out_frames)
+}
+
+
