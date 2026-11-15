@@ -1,0 +1,31 @@
+# MoonBit build and package artifacts
+_build/
+.mooncakes/
+target/
+*.mbti
+
+# Python / pyzmq test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+
+# Internal notes, plans, and agent artifacts (never commit)
+notes/
+plans/
+.antigravity/
+*.plan.md
+*walkthrough*.md
+task.md
+implementation_plan.md
+dedup_and_spec_research.md
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.tmp
