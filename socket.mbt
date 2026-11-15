@@ -198,11 +198,17 @@ pub async fn Socket::send(
       }
     Dealer | Push | Pair => self.hub.send_round_robin(msg, policy~)
     Router => self.hub.send_router(msg, policy~)
+    Pub | XPub =>
+      if self.socket_type == Pub {
+        self.hub.send_pub(msg) catch { _ => () }
+      } else {
+        self.hub.send_xsub(msg) catch { _ => () }
+      }
+    XSub => self.hub.send_xsub(msg) catch { _ => () }
     Pull =>
       raise InvalidState("PULL socket cannot send (receive-only socket per RFC 30)")
     Sub =>
       raise InvalidState("SUB socket cannot send application messages per RFC 29")
-    _ => self.hub.send_round_robin(msg, policy~)
   }
 }
 
@@ -273,19 +279,25 @@ pub async fn Socket::recv(self : Socket) -> Message raise ZmqError {
           raise Closed
         }
       }
-    Pair | Dealer | Pull => {
+    Pair | Dealer | Pull | Sub | XSub => {
       let (_, msg) = self.hub.recv_fair_queue()
       msg
     }
     Router => self.hub.recv_router()
+    XPub => {
+      let event_opt = self.hub.sub_events.try_get() catch { _ => None }
+      match event_opt {
+        Some(msg) => msg
+        None => {
+          let (_, msg) = self.hub.recv_fair_queue()
+          msg
+        }
+      }
+    }
     Push =>
       raise InvalidState("PUSH socket cannot recv (send-only socket per RFC 30)")
     Pub =>
       raise InvalidState("PUB socket cannot recv application messages per RFC 29")
-    _ => {
-      let (_, msg) = self.hub.recv_fair_queue()
-      msg
-    }
   }
 }
 

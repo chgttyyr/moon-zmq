@@ -181,6 +181,69 @@ async fn TransportHub::send_router(
 }
 
 ///|
+/// Publish a message to all connected peers whose registered topic subscriptions match
+/// the message's first frame (RFC 29 Section 2.1).
+///
+/// Uses `DropOnFull` HWM policy: if an individual peer's outbound queue is full,
+/// messages destined for that peer are dropped without blocking or raising.
+async fn TransportHub::send_pub(
+  self : TransportHub,
+  msg : Message,
+) -> Unit {
+  let encoded = msg.encode()
+  for p in self.pipes {
+    if p.is_open() && p.matches_subscription(msg) {
+      let _ = p.send_wire(encoded, policy=DropOnFull) catch { _ => false }
+    }
+  }
+}
+
+///|
+/// Forward a subscription or unsubscription message across an `XSUB` socket to publishers.
+///
+/// If `msg` is a valid subscription frame (`0x01` or `0x00` prefix), also updates the
+/// local subscription registry so it will be automatically resent on reconnect.
+async fn TransportHub::send_xsub(
+  self : TransportHub,
+  msg : Message,
+) -> Unit {
+  match decode_subscription_frame(msg) {
+    Some((is_sub, topic)) => {
+      if is_sub {
+        let mut exists = false
+        for existing in self.local_subscriptions {
+          if existing == topic {
+            exists = true
+            break
+          }
+        }
+        if !exists {
+          self.local_subscriptions.push(topic)
+        }
+      } else {
+        let mut idx = -1
+        for i = 0; i < self.local_subscriptions.length(); i = i + 1 {
+          if self.local_subscriptions[i] == topic {
+            idx = i
+            break
+          }
+        }
+        if idx >= 0 {
+          let _ = self.local_subscriptions.remove(idx)
+        }
+      }
+    }
+    None => ()
+  }
+  let encoded = msg.encode()
+  for p in self.pipes {
+    if p.is_open() {
+      let _ = p.send_wire(encoded, policy=DropOnFull) catch { _ => false }
+    }
+  }
+}
+
+///|
 /// Receive a message on a `ROUTER` socket (RFC 28 Section 2.2).
 /// Prepends the peer's routing identity as the first frame of the returned message.
 async fn TransportHub::recv_router(
@@ -194,5 +257,77 @@ async fn TransportHub::recv_router(
   }
   Message::multipart(out_frames)
 }
+
+///|
+/// Add a topic prefix subscription to a `SUB` socket.
+///
+/// If already connected, immediately sends a subscription frame (`0x01` + topic)
+/// across all active peer pipes.
+pub async fn Socket::subscribe(self : Socket, topic : Bytes) -> Unit raise ZmqError {
+  if self.closed {
+    raise Closed
+  }
+  if self.socket_type != Sub && self.socket_type != XSub {
+    raise InvalidState("subscribe() is only supported on SUB and XSUB sockets")
+  }
+  let mut exists = false
+  for existing in self.hub.local_subscriptions {
+    if existing == topic {
+      exists = true
+      break
+    }
+  }
+  if !exists {
+    self.hub.local_subscriptions.push(topic)
+  }
+  let wire = encode_subscription_frame(true, topic).encode()
+  for p in self.hub.pipes {
+    if p.is_open() {
+      let _ = p.send_wire(wire, policy=DropOnFull) catch { _ => false }
+    }
+  }
+}
+
+///|
+/// Convenience helper to subscribe to a string topic prefix.
+pub async fn Socket::subscribe_string(self : Socket, topic : String) -> Unit raise ZmqError {
+  self.subscribe(string_to_ascii_bytes(topic))
+}
+
+///|
+/// Remove a topic prefix subscription from a `SUB` socket.
+///
+/// Sends an unsubscription frame (`0x00` + topic) across all active peer pipes.
+pub async fn Socket::unsubscribe(self : Socket, topic : Bytes) -> Unit raise ZmqError {
+  if self.closed {
+    raise Closed
+  }
+  if self.socket_type != Sub && self.socket_type != XSub {
+    raise InvalidState("unsubscribe() is only supported on SUB and XSUB sockets")
+  }
+  let mut idx = -1
+  for i = 0; i < self.hub.local_subscriptions.length(); i = i + 1 {
+    if self.hub.local_subscriptions[i] == topic {
+      idx = i
+      break
+    }
+  }
+  if idx >= 0 {
+    let _ = self.hub.local_subscriptions.remove(idx)
+  }
+  let wire = encode_subscription_frame(false, topic).encode()
+  for p in self.hub.pipes {
+    if p.is_open() {
+      let _ = p.send_wire(wire, policy=DropOnFull) catch { _ => false }
+    }
+  }
+}
+
+///|
+/// Convenience helper to unsubscribe from a string topic prefix.
+pub async fn Socket::unsubscribe_string(self : Socket, topic : String) -> Unit raise ZmqError {
+  self.unsubscribe(string_to_ascii_bytes(topic))
+}
+
 
 
