@@ -12,10 +12,13 @@ pub(all) suberror ZmqError {
   HighWaterMarkReached
   Closed
   IoError(String)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend ZmqError with Eq::{not_equal, equal}
+
+///|
+pub extend ZmqError with @debug.Debug::{to_repr}
 
 ///|
 /// Frame flag bits defined by ZMTP 3.1 (RFC 23 Section 3.1).
@@ -102,10 +105,13 @@ pub struct Frame {
   more : Bool
   is_command : Bool
   data : Bytes
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend Frame with Eq::{not_equal, equal}
+
+///|
+pub extend Frame with @debug.Debug::{to_repr}
 
 ///|
 /// Create a data frame with an optional `more` indicator.
@@ -163,10 +169,13 @@ pub fn Frame::encode(self : Frame) -> Bytes {
 /// A ZeroMQ multipart message consisting of one or more contiguous data frames.
 pub struct Message {
   frames : Array[Bytes]
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend Message with Eq::{not_equal, equal}
+
+///|
+pub extend Message with @debug.Debug::{to_repr}
 
 ///|
 /// Construct a single-frame message from raw bytes.
@@ -232,10 +241,13 @@ pub fn Message::encode(self : Message) -> Bytes {
 pub(all) enum DecodedItem {
   CommandFrame(Bytes)
   DataMessage(Message)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend DecodedItem with Eq::{not_equal, equal}
+
+///|
+pub extend DecodedItem with @debug.Debug::{to_repr}
 
 ///|
 /// Streaming ZMTP 3.1 frame and multipart message decoder.

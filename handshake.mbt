@@ -12,10 +12,13 @@ pub(all) enum SocketType {
   Push
   Pull
   Pair
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend SocketType with Eq::{not_equal, equal}
+
+///|
+pub extend SocketType with @debug.Debug::{to_repr}
 
 ///|
 /// Return the canonical ZMTP 3.1 `Socket-Type` string for this socket type.
@@ -95,10 +98,13 @@ pub struct Greeting {
   version_minor : Int
   mechanism : String
   as_server : Bool
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend Greeting with Eq::{not_equal, equal}
+
+///|
+pub extend Greeting with @debug.Debug::{to_repr}
 
 ///|
 /// Construct a ZMTP 3.1 Greeting.
@@ -195,10 +201,13 @@ pub struct Metadata {
   socket_type : String
   identity : Bytes?
   properties : Array[(String, Bytes)]
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend Metadata with Eq::{not_equal, equal}
+
+///|
+pub extend Metadata with @debug.Debug::{to_repr}
 
 ///|
 /// Construct handshake metadata.
@@ -331,10 +340,13 @@ pub(all) enum ZmtpCommand {
   Welcome
   Initiate(Metadata)
   Unknown(String, Bytes)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend ZmtpCommand with Eq::{not_equal, equal}
+
+///|
+pub extend ZmtpCommand with @debug.Debug::{to_repr}
 
 ///|
 /// Encode a `ZmtpCommand` into a complete ZMTP command wire frame.
@@ -563,10 +575,13 @@ pub(all) enum SessionEvent {
   CommandReceived(ZmtpCommand)
   SendBytes(Bytes)
   ProtocolFailure(String)
-} derive(Eq)
+} derive(Eq, Debug)
 
 ///|
 pub extend SessionEvent with Eq::{not_equal, equal}
+
+///|
+pub extend SessionEvent with @debug.Debug::{to_repr}
 
 ///|
 enum NullSessionState {
