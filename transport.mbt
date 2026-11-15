@@ -359,8 +359,6 @@ pub struct TransportHub {
   socket_type : SocketType
   options : SocketOptions
   pipes : Array[Pipe]
-  servers : Array[@socket.TcpServer]
-  active_conns : Array[@socket.Tcp]
   tasks : Array[@async.Task[Unit]]
   mut next_pipe_id : Int
   mut rr_index : Int
@@ -386,8 +384,6 @@ pub fn TransportHub::new(
     socket_type,
     options,
     pipes: [],
-    servers: [],
-    active_conns: [],
     tasks: [],
     next_pipe_id: 1,
     rr_index: 0,
@@ -617,32 +613,31 @@ async fn TransportHub::run_peer_connection(
   group : @async.TaskGroup,
   conn : @socket.Tcp,
 ) -> Unit {
+  defer conn.close()
   if self.closed {
-    conn.close()
     return
   }
   // PAIR socket exclusivity check: only one active peer allowed at a time
   if self.socket_type == Pair && self.active_peer_count() >= 1 {
-    conn.close()
     return
   }
-  self.active_conns.push(conn)
   let hs = @async.with_timeout(self.options.handshake_timeout_ms, () => {
     perform_session_handshake(conn, self.socket_type, self.options)
   }) catch {
     err => {
+      if @async.is_being_cancelled() {
+        return
+      }
       self.handshake_failures = self.handshake_failures + 1
       match err {
         AuthFailed(reason) => self.last_auth_error = Some(reason)
         ProtocolError(reason) => self.last_auth_error = Some(reason)
         _ => ()
       }
-      conn.close()
       return
     }
   }
   if self.closed || (self.socket_type == Pair && self.active_peer_count() >= 1) {
-    conn.close()
     return
   }
   let pipe_id = self.next_pipe_id
@@ -661,7 +656,6 @@ async fn TransportHub::run_peer_connection(
   for item in hs.initial_items {
     if !self.handle_decoded_item(pipe, item) {
       self.detach_pipe(pipe_id)
-      conn.close()
       return
     }
   }
@@ -671,7 +665,7 @@ async fn TransportHub::run_peer_connection(
     no_wait=true,
     allow_failure=true,
     () => {
-      while !self.closed && pipe.is_open() {
+      while !self.closed && pipe.is_open() && !@async.is_being_cancelled() {
         match pipe.dequeue_outbound() {
           Some(wire) => {
             let _ = self.pipe_ready_notify.try_put(pipe_id) catch {
@@ -693,8 +687,11 @@ async fn TransportHub::run_peer_connection(
 
   // Run reader loop in current coroutine
   let decoder = hs.decoder
-  while !self.closed && pipe.is_open() {
+  while !self.closed && pipe.is_open() && !@async.is_being_cancelled() {
     let chunk = conn.read() catch { _ => None }
+    if @async.is_being_cancelled() {
+      break
+    }
     match chunk {
       Some(b) => {
         if b.length() == 0 {
@@ -729,7 +726,6 @@ async fn TransportHub::run_peer_connection(
   }
   self.detach_pipe(pipe_id)
   writer_task.cancel()
-  conn.close()
 }
 
 ///|
@@ -762,16 +758,16 @@ pub async fn TransportHub::bind(
   let server = @socket.TcpServer(addr, reuse_addr=true) catch {
     err => raise IoError("failed to bind \{endpoint}: \{err}")
   }
-  self.servers.push(server)
   let bound_endpoint = "tcp://\{server.addr}"
   let accept_task = group.spawn(
     no_wait=true,
     allow_failure=true,
     () => {
-      while !self.closed {
+      defer server.close()
+      while !self.closed && !@async.is_being_cancelled() {
         let accepted = server.accept() catch { _ => break }
         let (conn, _peer_addr) = accepted
-        if self.closed {
+        if self.closed || @async.is_being_cancelled() {
           conn.close()
           break
         }
@@ -811,7 +807,7 @@ pub fn TransportHub::connect(
         self.options.reconnect_ivl_ms
       }
       let mut first_attempt = true
-      while !self.closed {
+      while !self.closed && !@async.is_being_cancelled() {
         if !first_attempt {
           self.reconnect_attempts = self.reconnect_attempts + 1
           @async.sleep(delay_ms)
@@ -822,11 +818,18 @@ pub fn TransportHub::connect(
           )
         }
         first_attempt = false
-        if self.closed {
+        if self.closed || @async.is_being_cancelled() {
           break
         }
         let conn_opt : @socket.Tcp? = Some(@socket.Tcp::connect(addr)) catch {
           _ => None
+        }
+        if @async.is_being_cancelled() {
+          match conn_opt {
+            Some(c) => c.close()
+            None => ()
+          }
+          break
         }
         match conn_opt {
           Some(conn) => {
@@ -937,18 +940,10 @@ pub fn TransportHub::close(self : TransportHub) -> Unit {
   self.inbound_notify.close(clear=true)
   self.pipe_ready_notify.close(clear=true)
   self.sub_events.close(clear=true)
-  for s in self.servers {
-    s.close()
-  }
-  self.servers.clear()
   for p in self.pipes {
     p.close()
   }
   self.pipes.clear()
-  for c in self.active_conns {
-    c.close()
-  }
-  self.active_conns.clear()
   for t in self.tasks {
     t.cancel()
   }
