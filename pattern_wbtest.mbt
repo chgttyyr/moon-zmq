@@ -21,7 +21,10 @@ test "REQ and REP envelope wrap/split/attach roundtrip" {
   assert_eq(envelope[1], b"")
   assert_eq(payload.first_string(), "ping")
 
-  let reply_attached = attach_rep_envelope(envelope, Message::from_string("pong"))
+  let reply_attached = attach_rep_envelope(
+    envelope,
+    Message::from_string("pong"),
+  )
   assert_eq(reply_attached.frames.length(), 3)
   assert_eq(reply_attached.frames[0], b"router-1")
   assert_eq(reply_attached.frames[1], b"")
@@ -278,7 +281,11 @@ async test "XPUB and XSUB subscription forwarding and event notifications" {
     }
 
     // XSUB sends a subscription frame
-    xsub.send(Message::from_bytes(Bytes::from_array([b'\x01', b't', b'o', b'p', b'i', b'c'])))
+    xsub.send(
+      Message::from_bytes(
+        Bytes::from_array([b'\x01', b't', b'o', b'p', b'i', b'c']),
+      ),
+    )
 
     // Allow background reader on XPUB to read and post sub event
     @async.sleep(50)
@@ -286,7 +293,10 @@ async test "XPUB and XSUB subscription forwarding and event notifications" {
     // XPUB receives the subscription event
     let sub_event = xpub.recv()
     assert_eq(sub_event.first_bytes()[0], b'\x01')
-    assert_eq(ascii_bytes_to_string(sub_event.first_bytes()[1:].to_owned()), "topic")
+    assert_eq(
+      ascii_bytes_to_string(sub_event.first_bytes()[1:].to_owned()),
+      "topic",
+    )
 
     // XPUB publishes data matching subscription
     xpub.send_string("topic message 1")

@@ -8,7 +8,7 @@ pub struct Context {
 ///|
 /// Create a new ZeroMQ `Context`.
 pub fn Context::new() -> Context {
-  { sockets: [], closed: false }
+  { sockets: [], closed: false, }
 }
 
 ///|
@@ -16,7 +16,7 @@ pub fn Context::new() -> Context {
 pub fn Context::socket(
   self : Context,
   socket_type : SocketType,
-  options? : SocketOptions = SocketOptions::new(),
+  options~ : SocketOptions = SocketOptions::new(),
 ) -> Socket raise ZmqError {
   if self.closed {
     raise Closed
@@ -54,7 +54,7 @@ pub struct Socket {
 /// Create a standalone `Socket` with the specified `SocketType` and `SocketOptions`.
 pub fn Socket::new(
   socket_type : SocketType,
-  options? : SocketOptions = SocketOptions::new(),
+  options~ : SocketOptions = SocketOptions::new(),
 ) -> Socket {
   let hub = TransportHub::new(socket_type, options~)
   {
@@ -77,8 +77,8 @@ pub fn Socket::set_identity(self : Socket, identity : Bytes) -> Unit {
 /// Set the outbound and inbound High-Water Marks (`sndhwm`, `rcvhwm`).
 pub fn Socket::set_hwm(
   self : Socket,
-  sndhwm? : Int = DEFAULT_HWM,
-  rcvhwm? : Int = DEFAULT_HWM,
+  sndhwm~ : Int32 = DEFAULT_HWM,
+  rcvhwm~ : Int32 = DEFAULT_HWM,
 ) -> Unit {
   self.options.set_sndhwm(sndhwm)
   self.options.set_rcvhwm(rcvhwm)
@@ -88,8 +88,8 @@ pub fn Socket::set_hwm(
 /// Configure automatic reconnect initial interval and maximum exponential backoff in milliseconds.
 pub fn Socket::set_reconnect_interval(
   self : Socket,
-  ivl_ms : Int,
-  max_ms? : Int = 5000,
+  ivl_ms : Int32,
+  max_ms~ : Int32 = 5000,
 ) -> Unit {
   self.options.set_reconnect_interval(ivl_ms, max_ms~)
 }
@@ -121,7 +121,7 @@ pub fn Socket::set_plain_credentials(
 pub fn Socket::set_plain_server(
   self : Socket,
   enabled : Bool,
-  authenticator? : ((String, String) -> Bool)? = None,
+  authenticator~ : ((String, String) -> Bool)? = None,
 ) -> Unit {
   self.options.set_plain_server(enabled, authenticator~)
 }
@@ -155,7 +155,7 @@ pub fn Socket::connect(
 
 ///|
 /// Number of currently active peer connections on this socket.
-pub fn Socket::active_peer_count(self : Socket) -> Int {
+pub fn Socket::active_peer_count(self : Socket) -> Int32 {
   self.hub.active_peer_count()
 }
 
@@ -164,7 +164,7 @@ pub fn Socket::active_peer_count(self : Socket) -> Int {
 pub async fn Socket::send(
   self : Socket,
   msg : Message,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Unit raise ZmqError {
   if self.closed {
     raise Closed
@@ -200,15 +200,23 @@ pub async fn Socket::send(
     Router => self.hub.send_router(msg, policy~)
     Pub | XPub =>
       if self.socket_type == Pub {
-        self.hub.send_pub(msg) catch { _ => () }
+        self.hub.send_pub(msg) catch {
+          _ => ()
+        }
       } else {
-        self.hub.send_xsub(msg) catch { _ => () }
+        self.hub.send_xsub(msg) catch {
+          _ => ()
+        }
       }
     XSub => self.hub.send_xsub(msg) catch { _ => () }
     Pull =>
-      raise InvalidState("PULL socket cannot send (receive-only socket per RFC 30)")
+      raise InvalidState(
+        "PULL socket cannot send (receive-only socket per RFC 30)",
+      )
     Sub =>
-      raise InvalidState("SUB socket cannot send application messages per RFC 29")
+      raise InvalidState(
+        "SUB socket cannot send application messages per RFC 29",
+      )
   }
 }
 
@@ -217,7 +225,7 @@ pub async fn Socket::send(
 pub async fn Socket::send_string(
   self : Socket,
   s : String,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Unit raise ZmqError {
   self.send(Message::from_string(s), policy~)
 }
@@ -227,7 +235,7 @@ pub async fn Socket::send_string(
 pub async fn Socket::send_bytes(
   self : Socket,
   b : Bytes,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Unit raise ZmqError {
   self.send(Message::from_bytes(b), policy~)
 }
@@ -316,9 +324,13 @@ pub async fn Socket::recv(self : Socket) -> Message raise ZmqError {
       raise Closed
     }
     Push =>
-      raise InvalidState("PUSH socket cannot recv (send-only socket per RFC 30)")
+      raise InvalidState(
+        "PUSH socket cannot recv (send-only socket per RFC 30)",
+      )
     Pub =>
-      raise InvalidState("PUB socket cannot recv application messages per RFC 29")
+      raise InvalidState(
+        "PUB socket cannot recv application messages per RFC 29",
+      )
   }
 }
 

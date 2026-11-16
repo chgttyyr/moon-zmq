@@ -152,11 +152,9 @@ test "greeting version negotiation and libzmq padding compatibility" {
 
 ///|
 test "READY metadata with Socket-Type, Identity, and case-insensitive keys" {
-  let meta = Metadata::new(
-    "ROUTER",
-    identity=Some(b"worker-01"),
-    properties=[("X-Custom", b"value-123")],
-  )
+  let meta = Metadata::new("ROUTER", identity=Some(b"worker-01"), properties=[
+    ("X-Custom", b"value-123"),
+  ])
   let cmd_wire = ZmtpCommand::Ready(meta).encode_frame()
   let dec = FrameDecoder::new()
   let items = dec.feed(cmd_wire)
@@ -239,10 +237,7 @@ test "NullSession full handshake, incompatible socket type ERROR, and PING/PONG"
   let combined = concat_bytes([ping_wire, msg.encode()])
   let s_ev2 = server.feed(combined)
   assert_eq(s_ev2.length(), 3)
-  assert_eq(
-    s_ev2[0],
-    SendBytes(ZmtpCommand::Pong(b"keepalive").encode_frame()),
-  )
+  assert_eq(s_ev2[0], SendBytes(ZmtpCommand::Pong(b"keepalive").encode_frame()))
   assert_eq(s_ev2[1], CommandReceived(Ping(10, b"keepalive")))
   assert_eq(s_ev2[2], MessageReceived(msg))
 
@@ -281,7 +276,7 @@ test "NullSession full handshake, incompatible socket type ERROR, and PING/PONG"
 }
 
 ///|
-fn next_prng(state : Int) -> Int {
+fn next_prng(state : Int32) -> Int32 {
   // Deterministic 31-bit LCG for reproducible property-based testing
   (state * 1103515245 + 12345) & 0x7FFFFFFF
 }

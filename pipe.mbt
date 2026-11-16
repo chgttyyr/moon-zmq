@@ -20,27 +20,27 @@ pub extend HwmPolicy with @debug.Debug::{to_repr}
 /// Enforces send/receive High-Water Marks (`sndhwm`, `rcvhwm`) and tracks per-peer
 /// routing identity and PUB/XPUB topic subscriptions.
 pub struct Pipe {
-  id : Int
+  id : Int32
   peer_identity : Bytes
   peer_metadata : Metadata
-  sndhwm : Int
-  rcvhwm : Int
+  sndhwm : Int32
+  rcvhwm : Int32
   snd_queue : @aqueue.Queue[Bytes]
   rcv_queue : @aqueue.Queue[Message]
-  mut snd_count : Int
-  mut rcv_count : Int
+  mut snd_count : Int32
+  mut rcv_count : Int32
   subscriptions : Array[Bytes]
   mut closed : Bool
 }
 
 ///|
 /// Default send/receive high-water mark (1000 messages, matching libzmq default).
-pub const DEFAULT_HWM : Int = 1000
+pub const DEFAULT_HWM : Int32 = 1000
 
 ///|
 /// Generate a deterministic 5-byte routing identity (`\x00` + 4-byte big-endian id)
 /// when a peer does not supply an explicit `Identity` property in its handshake metadata.
-pub fn default_routing_id(pipe_id : Int) -> Bytes {
+pub fn default_routing_id(pipe_id : Int32) -> Bytes {
   Bytes::from_array([
     b'\x00',
     ((pipe_id >> 24) & 0xFF).to_byte(),
@@ -53,15 +53,20 @@ pub fn default_routing_id(pipe_id : Int) -> Bytes {
 ///|
 /// Create a new `Pipe` for an established peer session.
 pub fn Pipe::new(
-  id : Int,
+  id : Int32,
   peer_metadata : Metadata,
-  sndhwm? : Int = DEFAULT_HWM,
-  rcvhwm? : Int = DEFAULT_HWM,
+  sndhwm~ : Int32 = DEFAULT_HWM,
+  rcvhwm~ : Int32 = DEFAULT_HWM,
 ) -> Pipe {
   let effective_snd = if sndhwm <= 0 { 1 } else { sndhwm }
   let effective_rcv = if rcvhwm <= 0 { 1 } else { rcvhwm }
   let peer_identity = match peer_metadata.identity {
-    Some(ident) => if ident.length() > 0 { ident } else { default_routing_id(id) }
+    Some(ident) =>
+      if ident.length() > 0 {
+        ident
+      } else {
+        default_routing_id(id)
+      }
     None => default_routing_id(id)
   }
   {
@@ -103,7 +108,7 @@ pub fn Pipe::has_inbound(self : Pipe) -> Bool {
 pub async fn Pipe::send_wire(
   self : Pipe,
   wire : Bytes,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Bool raise ZmqError {
   if self.closed {
     raise Closed
@@ -169,7 +174,7 @@ pub fn Pipe::try_send_message(
 pub async fn Pipe::send_message(
   self : Pipe,
   msg : Message,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Bool raise ZmqError {
   self.send_wire(msg.encode(), policy~)
 }
@@ -190,7 +195,7 @@ pub async fn Pipe::dequeue_outbound(self : Pipe) -> Bytes? {
 pub async fn Pipe::push_inbound(
   self : Pipe,
   msg : Message,
-  drop_on_full? : Bool = false,
+  drop_on_full~ : Bool = false,
 ) -> Bool {
   if self.closed {
     return false

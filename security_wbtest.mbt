@@ -1,6 +1,5 @@
 ///|
 /// Unit & whitebox tests for RFC 24 PLAIN security mechanism.
-
 test "plain: hello encoding and decoding" {
   let u = "admin"
   let p = "secret123"
@@ -11,12 +10,14 @@ test "plain: hello encoding and decoding" {
   assert_eq(decoded_p, p)
 }
 
+///|
 test "plain: welcome encoding and check" {
   let welcome_frame = encode_plain_welcome()
   let body = welcome_frame[2:].to_owned()
   assert_true(is_plain_welcome(body))
 }
 
+///|
 test "plain: initiate encoding and decoding" {
   let meta = Metadata::new("REQ", identity=Some(b"client-1"))
   let init_frame = encode_plain_initiate(meta)
@@ -26,6 +27,7 @@ test "plain: initiate encoding and decoding" {
   assert_eq(decoded_meta.identity, Some(b"client-1"))
 }
 
+///|
 test "plain: malformed hello rejected" {
   let bad_body = b"\x05HEL"
   let mut is_err = false
@@ -38,6 +40,7 @@ test "plain: malformed hello rejected" {
   assert_true(is_err)
 }
 
+///|
 async test "plain: async authentication success with valid credentials" {
   @async.with_task_group(async fn(group) {
     let ctx = Context::new()
@@ -70,6 +73,7 @@ async test "plain: async authentication success with valid credentials" {
   })
 }
 
+///|
 async test "plain: async authentication rejection with invalid credentials" {
   @async.with_task_group(async fn(group) {
     let ctx = Context::new()
@@ -95,4 +99,3 @@ async test "plain: async authentication rejection with invalid credentials" {
     server.close()
   })
 }
-

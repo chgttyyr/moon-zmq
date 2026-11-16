@@ -70,7 +70,7 @@ pub fn split_rep_envelope(raw : Message) -> (Array[Bytes], Message)? {
   for i = delim_idx + 1; i < raw.frames.length(); i = i + 1 {
     payload.push(raw.frames[i])
   }
-  Some((envelope, { frames: payload }))
+  Some((envelope, { frames: payload, }))
 }
 
 ///|
@@ -95,7 +95,7 @@ pub fn attach_rep_envelope(envelope : Array[Bytes], reply : Message) -> Message 
 async fn TransportHub::send_round_robin_with_pipe(
   self : TransportHub,
   msg : Message,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Pipe raise ZmqError {
   while !self.closed {
     let n = self.pipes.length()
@@ -133,11 +133,13 @@ async fn TransportHub::send_round_robin_with_pipe(
 async fn TransportHub::send_router(
   self : TransportHub,
   msg : Message,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Unit raise ZmqError {
   if msg.frames.length() < 2 {
     if self.options.router_mandatory {
-      raise ProtocolError("ROUTER outgoing message must contain at least identity + 1 frame")
+      raise ProtocolError(
+        "ROUTER outgoing message must contain at least identity + 1 frame",
+      )
     }
     return
   }
@@ -172,11 +174,7 @@ async fn TransportHub::send_router(
         raise HighWaterMarkReached
       }
     }
-    None => {
-      if self.options.router_mandatory {
-        raise Unroutable(target_id)
-      }
-    }
+    None => if self.options.router_mandatory { raise Unroutable(target_id) }
   }
 }
 
@@ -186,10 +184,7 @@ async fn TransportHub::send_router(
 ///
 /// Uses `DropOnFull` HWM policy: if an individual peer's outbound queue is full,
 /// messages destined for that peer are dropped without blocking or raising.
-async fn TransportHub::send_pub(
-  self : TransportHub,
-  msg : Message,
-) -> Unit {
+async fn TransportHub::send_pub(self : TransportHub, msg : Message) -> Unit {
   let encoded = msg.encode()
   for p in self.pipes {
     if p.is_open() && p.matches_subscription(msg) {
@@ -203,12 +198,9 @@ async fn TransportHub::send_pub(
 ///
 /// If `msg` is a valid subscription frame (`0x01` or `0x00` prefix), also updates the
 /// local subscription registry so it will be automatically resent on reconnect.
-async fn TransportHub::send_xsub(
-  self : TransportHub,
-  msg : Message,
-) -> Unit {
+async fn TransportHub::send_xsub(self : TransportHub, msg : Message) -> Unit {
   match decode_subscription_frame(msg) {
-    Some((is_sub, topic)) => {
+    Some((is_sub, topic)) =>
       if is_sub {
         let mut exists = false
         for existing in self.local_subscriptions {
@@ -232,7 +224,6 @@ async fn TransportHub::send_xsub(
           let _ = self.local_subscriptions.remove(idx)
         }
       }
-    }
     None => ()
   }
   let encoded = msg.encode()
@@ -263,7 +254,10 @@ async fn TransportHub::recv_router(
 ///
 /// If already connected, immediately sends a subscription frame (`0x01` + topic)
 /// across all active peer pipes.
-pub async fn Socket::subscribe(self : Socket, topic : Bytes) -> Unit raise ZmqError {
+pub async fn Socket::subscribe(
+  self : Socket,
+  topic : Bytes,
+) -> Unit raise ZmqError {
   if self.closed {
     raise Closed
   }
@@ -290,7 +284,10 @@ pub async fn Socket::subscribe(self : Socket, topic : Bytes) -> Unit raise ZmqEr
 
 ///|
 /// Convenience helper to subscribe to a string topic prefix.
-pub async fn Socket::subscribe_string(self : Socket, topic : String) -> Unit raise ZmqError {
+pub async fn Socket::subscribe_string(
+  self : Socket,
+  topic : String,
+) -> Unit raise ZmqError {
   self.subscribe(string_to_ascii_bytes(topic))
 }
 
@@ -298,12 +295,17 @@ pub async fn Socket::subscribe_string(self : Socket, topic : String) -> Unit rai
 /// Remove a topic prefix subscription from a `SUB` socket.
 ///
 /// Sends an unsubscription frame (`0x00` + topic) across all active peer pipes.
-pub async fn Socket::unsubscribe(self : Socket, topic : Bytes) -> Unit raise ZmqError {
+pub async fn Socket::unsubscribe(
+  self : Socket,
+  topic : Bytes,
+) -> Unit raise ZmqError {
   if self.closed {
     raise Closed
   }
   if self.socket_type != Sub && self.socket_type != XSub {
-    raise InvalidState("unsubscribe() is only supported on SUB and XSUB sockets")
+    raise InvalidState(
+      "unsubscribe() is only supported on SUB and XSUB sockets",
+    )
   }
   let mut idx = -1
   for i = 0; i < self.hub.local_subscriptions.length(); i = i + 1 {
@@ -325,9 +327,9 @@ pub async fn Socket::unsubscribe(self : Socket, topic : Bytes) -> Unit raise Zmq
 
 ///|
 /// Convenience helper to unsubscribe from a string topic prefix.
-pub async fn Socket::unsubscribe_string(self : Socket, topic : String) -> Unit raise ZmqError {
+pub async fn Socket::unsubscribe_string(
+  self : Socket,
+  topic : String,
+) -> Unit raise ZmqError {
   self.unsubscribe(string_to_ascii_bytes(topic))
 }
-
-
-

@@ -45,7 +45,7 @@ pub fn ascii_to_upper(s : String) -> String {
   for i = 0; i < s.length(); i = i + 1 {
     let c = s.code_unit_at(i).to_int()
     let up = if c >= 97 && c <= 122 { c - 32 } else { c }
-    sb.write_char(Int::unsafe_to_char(up))
+    sb.write_char(Int32::unsafe_to_char(up))
   }
   sb.to_string()
 }
@@ -94,8 +94,8 @@ pub fn SocketType::is_compatible_with(
 ///|
 /// 64-byte ZMTP 3.1 Greeting exchanged at the beginning of a connection (RFC 23 Section 3.2).
 pub struct Greeting {
-  version_major : Int
-  version_minor : Int
+  version_major : Int32
+  version_minor : Int32
   mechanism : String
   as_server : Bool
 } derive(Eq, Debug)
@@ -109,12 +109,12 @@ pub extend Greeting with @debug.Debug::{to_repr}
 ///|
 /// Construct a ZMTP 3.1 Greeting.
 pub fn Greeting::new(
-  mechanism? : String = "NULL",
-  as_server? : Bool = false,
-  version_major? : Int = 3,
-  version_minor? : Int = 1,
+  mechanism~ : String = "NULL",
+  as_server~ : Bool = false,
+  version_major~ : Int32 = 3,
+  version_minor~ : Int32 = 1,
 ) -> Greeting {
-  { version_major, version_minor, mechanism, as_server }
+  { version_major, version_minor, mechanism, as_server, }
 }
 
 ///|
@@ -153,7 +153,9 @@ pub fn Greeting::encode(self : Greeting) -> Bytes {
 /// Decode and validate a 64-byte ZMTP Greeting.
 pub fn Greeting::decode(raw : Bytes) -> Greeting raise ZmqError {
   if raw.length() != 64 {
-    raise ProtocolError("greeting must be exactly 64 bytes, got \{raw.length()}")
+    raise ProtocolError(
+      "greeting must be exactly 64 bytes, got \{raw.length()}",
+    )
   }
   if raw[0].to_int() != 0xFF || raw[9].to_int() != 0x7F {
     raise ProtocolError("invalid ZMTP greeting signature")
@@ -176,7 +178,7 @@ pub fn Greeting::decode(raw : Bytes) -> Greeting raise ZmqError {
     } else if b < 0x20 || b > 0x7E {
       raise ProtocolError("invalid character in mechanism field: \{b}")
     } else {
-      sb.write_char(Int::unsafe_to_char(b))
+      sb.write_char(Int32::unsafe_to_char(b))
     }
   }
   let mechanism = sb.to_string()
@@ -187,12 +189,7 @@ pub fn Greeting::decode(raw : Bytes) -> Greeting raise ZmqError {
   if server_flag != 0 && server_flag != 1 {
     raise ProtocolError("invalid as-server flag in greeting: \{server_flag}")
   }
-  {
-    version_major,
-    version_minor,
-    mechanism,
-    as_server: server_flag == 1,
-  }
+  { version_major, version_minor, mechanism, as_server: server_flag == 1, }
 }
 
 ///|
@@ -213,10 +210,10 @@ pub extend Metadata with @debug.Debug::{to_repr}
 /// Construct handshake metadata.
 pub fn Metadata::new(
   socket_type : String,
-  identity? : Bytes? = None,
-  properties? : Array[(String, Bytes)] = [],
+  identity~ : Bytes? = None,
+  properties~ : Array[(String, Bytes)] = [],
 ) -> Metadata {
-  { socket_type, identity, properties }
+  { socket_type, identity, properties, }
 }
 
 ///|
@@ -305,7 +302,7 @@ pub fn Metadata::decode(raw : Bytes) -> Metadata raise ZmqError {
   if socket_type.is_empty() {
     raise ProtocolError("missing required Socket-Type in metadata")
   }
-  { socket_type, identity, properties }
+  { socket_type, identity, properties, }
 }
 
 ///|
@@ -332,7 +329,7 @@ pub fn Metadata::get(self : Metadata, key : String) -> Bytes? {
 pub(all) enum ZmtpCommand {
   Ready(Metadata)
   ErrorCmd(String)
-  Ping(Int, Bytes)
+  Ping(Int32, Bytes)
   Pong(Bytes)
   Subscribe(Bytes)
   Cancel(Bytes)
@@ -611,8 +608,8 @@ pub struct NullSession {
 /// Create a new `NullSession` for the given local socket type and optional identity.
 pub fn NullSession::new(
   local_type : SocketType,
-  local_identity? : Bytes? = None,
-  max_frame_size? : Int = DEFAULT_MAX_FRAME_SIZE,
+  local_identity~ : Bytes? = None,
+  max_frame_size~ : Int32 = DEFAULT_MAX_FRAME_SIZE,
 ) -> NullSession {
   {
     local_type,

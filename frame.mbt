@@ -3,7 +3,7 @@
 /// socket state errors, routing issues, and transport errors.
 pub(all) suberror ZmqError {
   ProtocolError(String)
-  FrameTooLarge(Int)
+  FrameTooLarge(Int32)
   InvalidSocketPair(String, String)
   AuthFailed(String)
   InvalidState(String)
@@ -22,21 +22,21 @@ pub extend ZmqError with @debug.Debug::{to_repr}
 
 ///|
 /// Frame flag bits defined by ZMTP 3.1 (RFC 23 Section 3.1).
-pub const FLAG_MORE : Int = 0x01
+pub const FLAG_MORE : Int32 = 0x01
 
 ///|
-pub const FLAG_LONG : Int = 0x02
+pub const FLAG_LONG : Int32 = 0x02
 
 ///|
-pub const FLAG_COMMAND : Int = 0x04
+pub const FLAG_COMMAND : Int32 = 0x04
 
 ///|
 /// Bits 3..7 of the frame flags octet are reserved and MUST be zero.
-pub const FLAG_RESERVED_MASK : Int = 0xF8
+pub const FLAG_RESERVED_MASK : Int32 = 0xF8
 
 ///|
 /// Default maximum allowed single frame payload size (64 MiB).
-pub const DEFAULT_MAX_FRAME_SIZE : Int = 67108864
+pub const DEFAULT_MAX_FRAME_SIZE : Int32 = 67108864
 
 ///|
 /// Convert an ASCII string into raw bytes.
@@ -53,14 +53,14 @@ pub fn string_to_ascii_bytes(s : String) -> Bytes {
 pub fn ascii_bytes_to_string(b : Bytes) -> String {
   let sb = StringBuilder()
   for i = 0; i < b.length(); i = i + 1 {
-    sb.write_char(Int::unsafe_to_char(b[i].to_int()))
+    sb.write_char(Int32::unsafe_to_char(b[i].to_int()))
   }
   sb.to_string()
 }
 
 ///|
 /// Slice a sub-range `[start, end)` from `Bytes`.
-pub fn slice_bytes(b : Bytes, start : Int, end : Int) -> Bytes {
+pub fn slice_bytes(b : Bytes, start : Int32, end : Int32) -> Bytes {
   let len = if end > start { end - start } else { 0 }
   let out : Array[Byte] = Array(capacity=len)
   for i = start; i < end; i = i + 1 {
@@ -115,14 +115,14 @@ pub extend Frame with @debug.Debug::{to_repr}
 
 ///|
 /// Create a data frame with an optional `more` indicator.
-pub fn Frame::data_frame(data : Bytes, more? : Bool = false) -> Frame {
-  { more, is_command: false, data }
+pub fn Frame::data_frame(data : Bytes, more~ : Bool = false) -> Frame {
+  { more, is_command: false, data, }
 }
 
 ///|
 /// Create a command frame (`COMMAND` flag set, `MORE` flag cleared).
 pub fn Frame::command_frame(data : Bytes) -> Frame {
-  { more: false, is_command: true, data }
+  { more: false, is_command: true, data, }
 }
 
 ///|
@@ -180,13 +180,13 @@ pub extend Message with @debug.Debug::{to_repr}
 ///|
 /// Construct a single-frame message from raw bytes.
 pub fn Message::from_bytes(payload : Bytes) -> Message {
-  { frames: [payload] }
+  { frames: [payload], }
 }
 
 ///|
 /// Construct a single-frame message from an ASCII/UTF-8 string.
 pub fn Message::from_string(s : String) -> Message {
-  { frames: [string_to_ascii_bytes(s)] }
+  { frames: [string_to_ascii_bytes(s)], }
 }
 
 ///|
@@ -194,7 +194,7 @@ pub fn Message::from_string(s : String) -> Message {
 /// If an empty array is passed, a single empty frame `[b""]` is used per ZMTP rules.
 pub fn Message::multipart(frames : Array[Bytes]) -> Message {
   if frames.is_empty() {
-    { frames: [b""] }
+    { frames: [b""], }
   } else {
     { frames, }
   }
@@ -202,7 +202,7 @@ pub fn Message::multipart(frames : Array[Bytes]) -> Message {
 
 ///|
 /// Number of frames in the multipart message.
-pub fn Message::len(self : Message) -> Int {
+pub fn Message::len(self : Message) -> Int32 {
   self.frames.length()
 }
 
@@ -253,9 +253,9 @@ pub extend DecodedItem with @debug.Debug::{to_repr}
 /// Streaming ZMTP 3.1 frame and multipart message decoder.
 /// Handles arbitrary TCP fragmentation (partial headers/bodies) and coalescing.
 pub struct FrameDecoder {
-  max_frame_size : Int
+  max_frame_size : Int32
   mut buf : Array[Byte]
-  mut pos : Int
+  mut pos : Int32
   mut pending_frames : Array[Bytes]
   mut failed : Bool
 }
@@ -263,9 +263,9 @@ pub struct FrameDecoder {
 ///|
 /// Create a new streaming frame decoder with an optional maximum frame size cap.
 pub fn FrameDecoder::new(
-  max_frame_size? : Int = DEFAULT_MAX_FRAME_SIZE,
+  max_frame_size~ : Int32 = DEFAULT_MAX_FRAME_SIZE,
 ) -> FrameDecoder {
-  { max_frame_size, buf: [], pos: 0, pending_frames: [], failed: false }
+  { max_frame_size, buf: [], pos: 0, pending_frames: [], failed: false, }
 }
 
 ///|

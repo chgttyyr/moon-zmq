@@ -172,7 +172,9 @@ async fn perform_plain_handshake_server(
   let peer_greet = Greeting::decode(Bytes::from_array(greet_buf))
   if peer_greet.mechanism != "PLAIN" {
     let reason = "security mechanism mismatch: expected PLAIN, got \{peer_greet.mechanism}"
-    conn.write(ZmtpCommand::ErrorCmd(reason).encode_frame()) catch { _ => () }
+    conn.write(ZmtpCommand::ErrorCmd(reason).encode_frame()) catch {
+      _ => ()
+    }
     raise AuthFailed(reason)
   }
 
@@ -228,8 +230,12 @@ async fn perform_plain_handshake_server(
   }
 
   if !is_auth_ok {
-    let err_frame = ZmtpCommand::ErrorCmd("authentication failed: 400 Invalid credentials").encode_frame()
-    conn.write(err_frame) catch { _ => () }
+    let err_frame = ZmtpCommand::ErrorCmd(
+      "authentication failed: 400 Invalid credentials",
+    ).encode_frame()
+    conn.write(err_frame) catch {
+      _ => ()
+    }
     raise AuthFailed("authentication failed for user '\{username}'")
   }
 
@@ -247,7 +253,8 @@ async fn perform_plain_handshake_server(
       match item {
         CommandFrame(body) => {
           let meta = decode_plain_initiate(body) catch {
-            _ => raise ProtocolError("expected PLAIN INITIATE command from client")
+            _ =>
+              raise ProtocolError("expected PLAIN INITIATE command from client")
           }
           match SocketType::from_zmtp_name(meta.socket_type) {
             Some(peer_st) =>
@@ -255,10 +262,18 @@ async fn perform_plain_handshake_server(
                 peer_meta = Some(meta)
               } else {
                 let reason = "incompatible socket types: \{local_type.to_zmtp_name()} vs \{meta.socket_type}"
-                conn.write(ZmtpCommand::ErrorCmd(reason).encode_frame()) catch { _ => () }
-                raise InvalidSocketPair(local_type.to_zmtp_name(), meta.socket_type)
+                conn.write(ZmtpCommand::ErrorCmd(reason).encode_frame()) catch {
+                  _ => ()
+                }
+                raise InvalidSocketPair(
+                  local_type.to_zmtp_name(),
+                  meta.socket_type,
+                )
               }
-            None => raise ProtocolError("unknown client Socket-Type: \{meta.socket_type}")
+            None =>
+              raise ProtocolError(
+                "unknown client Socket-Type: \{meta.socket_type}",
+              )
           }
         }
         _ => raise ProtocolError("unexpected data frame before PLAIN INITIATE")
@@ -283,7 +298,10 @@ async fn perform_plain_handshake_server(
   }
 
   // Send READY command to client
-  let local_meta = Metadata::new(local_type.to_zmtp_name(), identity=options.identity)
+  let local_meta = Metadata::new(
+    local_type.to_zmtp_name(),
+    identity=options.identity,
+  )
   conn.write(ZmtpCommand::Ready(local_meta).encode_frame()) catch {
     err => raise IoError("failed writing READY command: \{err}")
   }
@@ -294,7 +312,7 @@ async fn perform_plain_handshake_server(
     idx = idx + 1
   }
 
-  { peer_meta: peer_meta.unwrap(), decoder, initial_items: remaining }
+  { peer_meta: peer_meta.unwrap(), decoder, initial_items: remaining, }
 }
 
 ///|
@@ -362,7 +380,7 @@ async fn perform_plain_handshake_client(
       let item = pending_items[idx]
       idx = idx + 1
       match item {
-        CommandFrame(body) => {
+        CommandFrame(body) =>
           if is_plain_welcome(body) {
             welcome_received = true
           } else {
@@ -370,11 +388,11 @@ async fn perform_plain_handshake_client(
               _ => raise ProtocolError("unknown command instead of WELCOME")
             }
             match cmd {
-              ErrorCmd(reason) => raise AuthFailed("server rejected authentication: \{reason}")
+              ErrorCmd(reason) =>
+                raise AuthFailed("server rejected authentication: \{reason}")
               _ => raise ProtocolError("unexpected command instead of WELCOME")
             }
           }
-        }
         _ => raise ProtocolError("unexpected data frame before WELCOME")
       }
     }
@@ -397,7 +415,10 @@ async fn perform_plain_handshake_client(
   }
 
   // Step 2: Send INITIATE command with client metadata
-  let local_meta = Metadata::new(local_type.to_zmtp_name(), identity=options.identity)
+  let local_meta = Metadata::new(
+    local_type.to_zmtp_name(),
+    identity=options.identity,
+  )
   conn.write(encode_plain_initiate(local_meta)) catch {
     err => raise IoError("failed writing PLAIN INITIATE: \{err}")
   }
@@ -420,11 +441,18 @@ async fn perform_plain_handshake_client(
                   if local_type.is_compatible_with(peer_st) {
                     peer_meta = Some(meta)
                   } else {
-                    raise InvalidSocketPair(local_type.to_zmtp_name(), meta.socket_type)
+                    raise InvalidSocketPair(
+                      local_type.to_zmtp_name(),
+                      meta.socket_type,
+                    )
                   }
-                None => raise ProtocolError("unknown server Socket-Type: \{meta.socket_type}")
+                None =>
+                  raise ProtocolError(
+                    "unknown server Socket-Type: \{meta.socket_type}",
+                  )
               }
-            ErrorCmd(reason) => raise ProtocolError("server sent ERROR: \{reason}")
+            ErrorCmd(reason) =>
+              raise ProtocolError("server sent ERROR: \{reason}")
             _ => raise ProtocolError("unexpected command before READY")
           }
         }
@@ -455,5 +483,5 @@ async fn perform_plain_handshake_client(
     idx = idx + 1
   }
 
-  { peer_meta: peer_meta.unwrap(), decoder, initial_items: remaining }
+  { peer_meta: peer_meta.unwrap(), decoder, initial_items: remaining, }
 }

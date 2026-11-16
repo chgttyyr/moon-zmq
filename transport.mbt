@@ -2,12 +2,12 @@
 /// Configurable options for a ZeroMQ socket and its underlying ZMTP transport.
 pub struct SocketOptions {
   mut identity : Bytes?
-  mut sndhwm : Int
-  mut rcvhwm : Int
-  mut reconnect_ivl_ms : Int
-  mut reconnect_ivl_max_ms : Int
-  mut handshake_timeout_ms : Int
-  mut max_frame_size : Int
+  mut sndhwm : Int32
+  mut rcvhwm : Int32
+  mut reconnect_ivl_ms : Int32
+  mut reconnect_ivl_max_ms : Int32
+  mut handshake_timeout_ms : Int32
+  mut max_frame_size : Int32
   mut router_mandatory : Bool
   mut xpub_verbose : Bool
   mut send_subscribe_commands : Bool
@@ -44,13 +44,13 @@ pub fn SocketOptions::set_identity(self : SocketOptions, id : Bytes?) -> Unit {
 
 ///|
 /// Set the outbound High-Water Mark (`sndhwm`) on `SocketOptions`.
-pub fn SocketOptions::set_sndhwm(self : SocketOptions, hwm : Int) -> Unit {
+pub fn SocketOptions::set_sndhwm(self : SocketOptions, hwm : Int32) -> Unit {
   self.sndhwm = hwm
 }
 
 ///|
 /// Set the inbound High-Water Mark (`rcvhwm`) on `SocketOptions`.
-pub fn SocketOptions::set_rcvhwm(self : SocketOptions, hwm : Int) -> Unit {
+pub fn SocketOptions::set_rcvhwm(self : SocketOptions, hwm : Int32) -> Unit {
   self.rcvhwm = hwm
 }
 
@@ -58,8 +58,8 @@ pub fn SocketOptions::set_rcvhwm(self : SocketOptions, hwm : Int) -> Unit {
 /// Set the reconnect initial interval (`reconnect_ivl_ms`) and max backoff (`reconnect_ivl_max_ms`).
 pub fn SocketOptions::set_reconnect_interval(
   self : SocketOptions,
-  ivl_ms : Int,
-  max_ms? : Int = 5000,
+  ivl_ms : Int32,
+  max_ms~ : Int32 = 5000,
 ) -> Unit {
   self.reconnect_ivl_ms = ivl_ms
   self.reconnect_ivl_max_ms = max_ms
@@ -69,7 +69,7 @@ pub fn SocketOptions::set_reconnect_interval(
 /// Set the handshake timeout in milliseconds (`handshake_timeout_ms`).
 pub fn SocketOptions::set_handshake_timeout(
   self : SocketOptions,
-  timeout_ms : Int,
+  timeout_ms : Int32,
 ) -> Unit {
   self.handshake_timeout_ms = timeout_ms
 }
@@ -78,7 +78,7 @@ pub fn SocketOptions::set_handshake_timeout(
 /// Set the maximum allowed single frame size in bytes (`max_frame_size`).
 pub fn SocketOptions::set_max_frame_size(
   self : SocketOptions,
-  max_bytes : Int,
+  max_bytes : Int32,
 ) -> Unit {
   self.max_frame_size = max_bytes
 }
@@ -126,7 +126,7 @@ pub fn SocketOptions::set_plain_credentials(
 pub fn SocketOptions::set_plain_server(
   self : SocketOptions,
   enabled : Bool,
-  authenticator? : ((String, String) -> Bool)? = None,
+  authenticator~ : ((String, String) -> Bool)? = None,
 ) -> Unit {
   self.plain_server = enabled
   self.zap_authenticator = authenticator
@@ -139,10 +139,10 @@ pub fn SocketOptions::set_plain_server(
 /// Compute the next reconnect delay in milliseconds using exponential backoff,
 /// capped at `max_ms`. If `max_ms <= initial_ms`, a fixed interval `initial_ms` is used.
 pub fn next_reconnect_delay_ms(
-  current_ms : Int,
-  initial_ms : Int,
-  max_ms : Int,
-) -> Int {
+  current_ms : Int32,
+  initial_ms : Int32,
+  max_ms : Int32,
+) -> Int32 {
   let base = if initial_ms <= 0 { 10 } else { initial_ms }
   if max_ms <= base {
     return base
@@ -162,7 +162,7 @@ pub fn next_reconnect_delay_ms(
 /// and `"localhost"` (mapped to `127.0.0.1`).
 pub fn parse_tcp_endpoint(
   endpoint : String,
-  for_bind? : Bool = false,
+  for_bind~ : Bool = false,
 ) -> @socket.Addr raise ZmqError {
   if !endpoint.has_prefix("tcp://") {
     raise InvalidEndpoint(
@@ -186,7 +186,9 @@ pub fn parse_tcp_endpoint(
     _ => raise InvalidEndpoint("invalid port in endpoint: \{endpoint}")
   }
   if port < 0 || port > 65535 {
-    raise InvalidEndpoint("port out of range (0..65535) in endpoint: \{endpoint}")
+    raise InvalidEndpoint(
+      "port out of range (0..65535) in endpoint: \{endpoint}",
+    )
   }
   if !for_bind && port == 0 {
     raise InvalidEndpoint("cannot connect to port 0 in endpoint: \{endpoint}")
@@ -204,7 +206,10 @@ pub fn parse_tcp_endpoint(
   }
   let normalized = "\{host}:\{port}"
   @socket.Addr::parse(normalized) catch {
-    _ => raise InvalidEndpoint("invalid IPv4/IPv6 address in endpoint: \{endpoint}")
+    _ =>
+      raise InvalidEndpoint(
+        "invalid IPv4/IPv6 address in endpoint: \{endpoint}",
+      )
   }
 }
 
@@ -347,7 +352,7 @@ async fn perform_null_handshake(
     idx = idx + 1
   }
   match peer_meta {
-    Some(m) => { peer_meta: m, decoder, initial_items: remaining }
+    Some(m) => { peer_meta: m, decoder, initial_items: remaining, }
     None => raise ProtocolError("handshake failed to produce metadata")
   }
 }
@@ -360,16 +365,16 @@ pub struct TransportHub {
   options : SocketOptions
   pipes : Array[Pipe]
   tasks : Array[@async.Task[Unit]]
-  mut next_pipe_id : Int
-  mut rr_index : Int
-  mut fq_index : Int
-  inbound_notify : @aqueue.Queue[Int]
-  pipe_ready_notify : @aqueue.Queue[Int]
+  mut next_pipe_id : Int32
+  mut rr_index : Int32
+  mut fq_index : Int32
+  inbound_notify : @aqueue.Queue[Int32]
+  pipe_ready_notify : @aqueue.Queue[Int32]
   sub_events : @aqueue.Queue[Message]
   local_subscriptions : Array[Bytes]
-  topic_refcounts : Map[Bytes, Int]
-  mut reconnect_attempts : Int
-  mut handshake_failures : Int
+  topic_refcounts : Map[Bytes, Int32]
+  mut reconnect_attempts : Int32
+  mut handshake_failures : Int32
   mut last_auth_error : String?
   mut closed : Bool
 }
@@ -378,7 +383,7 @@ pub struct TransportHub {
 /// Create a new `TransportHub` for the given `SocketType` and `SocketOptions`.
 pub fn TransportHub::new(
   socket_type : SocketType,
-  options? : SocketOptions = SocketOptions::new(),
+  options~ : SocketOptions = SocketOptions::new(),
 ) -> TransportHub {
   {
     socket_type,
@@ -402,7 +407,7 @@ pub fn TransportHub::new(
 
 ///|
 /// Number of currently active (handshake-completed) peer connections.
-pub fn TransportHub::active_peer_count(self : TransportHub) -> Int {
+pub fn TransportHub::active_peer_count(self : TransportHub) -> Int32 {
   let mut count = 0
   for p in self.pipes {
     if p.is_open() {
@@ -414,13 +419,13 @@ pub fn TransportHub::active_peer_count(self : TransportHub) -> Int {
 
 ///|
 /// Total number of automatic reconnection attempts made by `connect` endpoints.
-pub fn TransportHub::reconnect_count(self : TransportHub) -> Int {
+pub fn TransportHub::reconnect_count(self : TransportHub) -> Int32 {
   self.reconnect_attempts
 }
 
 ///|
 /// Remove a closed pipe from the active pipes list and adjust its topic subscriptions.
-fn TransportHub::detach_pipe(self : TransportHub, pipe_id : Int) -> Unit {
+fn TransportHub::detach_pipe(self : TransportHub, pipe_id : Int32) -> Unit {
   let mut idx = -1
   for i = 0; i < self.pipes.length(); i = i + 1 {
     if self.pipes[i].id == pipe_id {
@@ -650,28 +655,22 @@ async fn TransportHub::run_peer_connection(
   let _ = self.pipe_ready_notify.try_put(pipe_id) catch { _ => false }
 
   // Spawn writer coroutine for this pipe
-  let writer_task = group.spawn(
-    no_wait=true,
-    allow_failure=true,
-    () => {
-      while !self.closed && pipe.is_open() && !@async.is_being_cancelled() {
-        match pipe.dequeue_outbound() {
-          Some(wire) => {
-            let _ = self.pipe_ready_notify.try_put(pipe_id) catch {
-              _ => false
-            }
-            conn.write(wire) catch {
-              _ => {
-                pipe.close()
-                break
-              }
+  let writer_task = group.spawn(no_wait=true, allow_failure=true, () => {
+    while !self.closed && pipe.is_open() && !@async.is_being_cancelled() {
+      match pipe.dequeue_outbound() {
+        Some(wire) => {
+          let _ = self.pipe_ready_notify.try_put(pipe_id) catch { _ => false }
+          conn.write(wire) catch {
+            _ => {
+              pipe.close()
+              break
             }
           }
-          None => break
         }
+        None => break
       }
-    },
-  )
+    }
+  })
   self.tasks.push(writer_task)
 
   self.send_initial_subscriptions(pipe)
@@ -758,27 +757,21 @@ pub async fn TransportHub::bind(
     err => raise IoError("failed to bind \{endpoint}: \{err}")
   }
   let bound_endpoint = "tcp://\{server.addr}"
-  let accept_task = group.spawn(
-    no_wait=true,
-    allow_failure=true,
-    () => {
-      defer server.close()
-      while !self.closed && !@async.is_being_cancelled() {
-        let accepted = server.accept() catch { _ => break }
-        let (conn, _peer_addr) = accepted
-        if self.closed || @async.is_being_cancelled() {
-          conn.close()
-          break
-        }
-        let conn_task = group.spawn(
-          no_wait=true,
-          allow_failure=true,
-          () => self.run_peer_connection(group, conn),
-        )
-        self.tasks.push(conn_task)
+  let accept_task = group.spawn(no_wait=true, allow_failure=true, () => {
+    defer server.close()
+    while !self.closed && !@async.is_being_cancelled() {
+      let accepted = server.accept() catch { _ => break }
+      let (conn, _peer_addr) = accepted
+      if self.closed || @async.is_being_cancelled() {
+        conn.close()
+        break
       }
-    },
-  )
+      let conn_task = group.spawn(no_wait=true, allow_failure=true, () => {
+        self.run_peer_connection(group, conn)
+      })
+      self.tasks.push(conn_task)
+    }
+  })
   self.tasks.push(accept_task)
   bound_endpoint
 }
@@ -796,58 +789,54 @@ pub fn TransportHub::connect(
     raise Closed
   }
   let addr = parse_tcp_endpoint(endpoint, for_bind=false)
-  let connect_task = group.spawn(
-    no_wait=true,
-    allow_failure=true,
-    () => {
-      let mut delay_ms = if self.options.reconnect_ivl_ms <= 0 {
-        10
-      } else {
-        self.options.reconnect_ivl_ms
+  let connect_task = group.spawn(no_wait=true, allow_failure=true, () => {
+    let mut delay_ms = if self.options.reconnect_ivl_ms <= 0 {
+      10
+    } else {
+      self.options.reconnect_ivl_ms
+    }
+    let mut first_attempt = true
+    while !self.closed && !@async.is_being_cancelled() {
+      if !first_attempt {
+        self.reconnect_attempts = self.reconnect_attempts + 1
+        @async.sleep(delay_ms)
+        delay_ms = next_reconnect_delay_ms(
+          delay_ms,
+          self.options.reconnect_ivl_ms,
+          self.options.reconnect_ivl_max_ms,
+        )
       }
-      let mut first_attempt = true
-      while !self.closed && !@async.is_being_cancelled() {
-        if !first_attempt {
-          self.reconnect_attempts = self.reconnect_attempts + 1
-          @async.sleep(delay_ms)
-          delay_ms = next_reconnect_delay_ms(
-            delay_ms,
-            self.options.reconnect_ivl_ms,
-            self.options.reconnect_ivl_max_ms,
-          )
-        }
-        first_attempt = false
-        if self.closed || @async.is_being_cancelled() {
-          break
-        }
-        let conn_opt : @socket.Tcp? = Some(@socket.Tcp::connect(addr)) catch {
-          _ => None
-        }
-        if @async.is_being_cancelled() {
-          match conn_opt {
-            Some(c) => c.close()
-            None => ()
-          }
-          break
-        }
+      first_attempt = false
+      if self.closed || @async.is_being_cancelled() {
+        break
+      }
+      let conn_opt : @socket.Tcp? = Some(@socket.Tcp::connect(addr)) catch {
+        _ => None
+      }
+      if @async.is_being_cancelled() {
         match conn_opt {
-          Some(conn) => {
-            let prev_peers = self.next_pipe_id
-            self.run_peer_connection(group, conn)
-            // If a pipe was successfully established during this run, reset backoff delay
-            if self.next_pipe_id > prev_peers {
-              delay_ms = if self.options.reconnect_ivl_ms <= 0 {
-                10
-              } else {
-                self.options.reconnect_ivl_ms
-              }
-            }
-          }
+          Some(c) => c.close()
           None => ()
         }
+        break
       }
-    },
-  )
+      match conn_opt {
+        Some(conn) => {
+          let prev_peers = self.next_pipe_id
+          self.run_peer_connection(group, conn)
+          // If a pipe was successfully established during this run, reset backoff delay
+          if self.next_pipe_id > prev_peers {
+            delay_ms = if self.options.reconnect_ivl_ms <= 0 {
+              10
+            } else {
+              self.options.reconnect_ivl_ms
+            }
+          }
+        }
+        None => ()
+      }
+    }
+  })
   self.tasks.push(connect_task)
 }
 
@@ -873,7 +862,7 @@ pub async fn TransportHub::wait_for_writable_pipe(
 pub async fn TransportHub::send_round_robin(
   self : TransportHub,
   msg : Message,
-  policy? : HwmPolicy = BlockOnFull,
+  policy~ : HwmPolicy = BlockOnFull,
 ) -> Unit raise ZmqError {
   while !self.closed {
     let n = self.pipes.length()
