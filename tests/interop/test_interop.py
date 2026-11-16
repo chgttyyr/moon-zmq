@@ -31,11 +31,12 @@ if sys.platform == "win32":
 
 
 def get_interop_bin():
-    exe_name = "interop.exe" if os.name == "nt" else "interop"
-    # Search in default build directory
+    # Search in default build directory (MoonBit produces .exe on all native platforms)
     candidates = [
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "debug", "build", "cmd", "interop", exe_name)),
-        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "release", "build", "cmd", "interop", exe_name)),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "debug", "build", "cmd", "interop", "interop.exe")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "debug", "build", "cmd", "interop", "interop")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "release", "build", "cmd", "interop", "interop.exe")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "_build", "native", "release", "build", "cmd", "interop", "interop")),
     ]
     for c in candidates:
         if os.path.exists(c):
