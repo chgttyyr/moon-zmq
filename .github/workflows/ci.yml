@@ -20,8 +20,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup MoonBit CLI
-        uses: moonbitlang/setup-moonbit@v1
+      - name: Setup MoonBit via Moonup
+        uses: chawyehsu/setup-moonup@v2
 
       - name: Setup Python
         uses: actions/setup-python@v5
