@@ -285,14 +285,35 @@ pub async fn Socket::recv(self : Socket) -> Message raise ZmqError {
     }
     Router => self.hub.recv_router()
     XPub => {
-      let event_opt = self.hub.sub_events.try_get() catch { _ => None }
-      match event_opt {
-        Some(msg) => msg
-        None => {
-          let (_, msg) = self.hub.recv_fair_queue()
-          msg
+      while !self.closed {
+        let event_opt = self.hub.sub_events.try_get() catch { _ => None }
+        match event_opt {
+          Some(msg) => return msg
+          None => ()
+        }
+        let _ = self.hub.inbound_notify.get() catch { _ => raise Closed }
+        let event_opt2 = self.hub.sub_events.try_get() catch { _ => None }
+        match event_opt2 {
+          Some(ev) => return ev
+          None => {
+            let n = self.hub.pipes.length()
+            if n > 0 {
+              for offset = 0; offset < n; offset = offset + 1 {
+                let idx = (self.hub.fq_index + offset) % n
+                let p = self.hub.pipes[idx]
+                match p.try_recv_message() {
+                  Some(msg) => {
+                    self.hub.fq_index = (idx + 1) % n
+                    return msg
+                  }
+                  None => ()
+                }
+              }
+            }
+          }
         }
       }
+      raise Closed
     }
     Push =>
       raise InvalidState("PUSH socket cannot recv (send-only socket per RFC 30)")

@@ -621,9 +621,7 @@ async fn TransportHub::run_peer_connection(
   if self.socket_type == Pair && self.active_peer_count() >= 1 {
     return
   }
-  let hs = @async.with_timeout(self.options.handshake_timeout_ms, () => {
-    perform_session_handshake(conn, self.socket_type, self.options)
-  }) catch {
+  let hs = perform_session_handshake(conn, self.socket_type, self.options) catch {
     err => {
       if @async.is_being_cancelled() {
         return
@@ -649,16 +647,7 @@ async fn TransportHub::run_peer_connection(
     rcvhwm=self.options.rcvhwm,
   )
   self.pipes.push(pipe)
-  self.send_initial_subscriptions(pipe)
   let _ = self.pipe_ready_notify.try_put(pipe_id) catch { _ => false }
-
-  // Process any frames that arrived coalesced with the final handshake packet
-  for item in hs.initial_items {
-    if !self.handle_decoded_item(pipe, item) {
-      self.detach_pipe(pipe_id)
-      return
-    }
-  }
 
   // Spawn writer coroutine for this pipe
   let writer_task = group.spawn(
@@ -684,6 +673,16 @@ async fn TransportHub::run_peer_connection(
     },
   )
   self.tasks.push(writer_task)
+
+  self.send_initial_subscriptions(pipe)
+
+  // Process any frames that arrived coalesced with the final handshake packet
+  for item in hs.initial_items {
+    if !self.handle_decoded_item(pipe, item) {
+      self.detach_pipe(pipe_id)
+      return
+    }
+  }
 
   // Run reader loop in current coroutine
   let decoder = hs.decoder
