@@ -21,6 +21,27 @@ pub extend ZmqError with Eq::{not_equal, equal}
 pub extend ZmqError with @debug.Debug::{to_repr}
 
 ///|
+pub extend ZmqError with Show::{to_string, output}
+
+///|
+pub impl Show for ZmqError with output(self, logger) {
+  match self {
+    ProtocolError(msg) => logger.write_string("ProtocolError(\{msg})")
+    FrameTooLarge(sz) => logger.write_string("FrameTooLarge(\{sz})")
+    InvalidSocketPair(l, r) =>
+      logger.write_string("InvalidSocketPair(\{l}, \{r})")
+    AuthFailed(msg) => logger.write_string("AuthFailed(\{msg})")
+    InvalidState(msg) => logger.write_string("InvalidState(\{msg})")
+    InvalidEndpoint(msg) => logger.write_string("InvalidEndpoint(\{msg})")
+    Unroutable(_) => logger.write_string("Unroutable")
+    HighWaterMarkReached => logger.write_string("HighWaterMarkReached")
+    Closed => logger.write_string("Closed")
+    IoError(msg) => logger.write_string("IoError(\{msg})")
+  }
+}
+
+
+///|
 /// Frame flag bits defined by ZMTP 3.1 (RFC 23 Section 3.1).
 pub const FLAG_MORE : Int32 = 0x01
 
