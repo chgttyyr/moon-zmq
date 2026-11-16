@@ -735,7 +735,7 @@ async fn perform_session_handshake(
   options : SocketOptions,
 ) -> HandshakeResult raise ZmqError {
   if options.plain_server || options.plain_credentials is Some(_) {
-    raise ProtocolError("PLAIN mechanism not configured")
+    perform_plain_handshake(conn, local_type, options)
   } else {
     perform_null_handshake(conn, local_type, options)
   }
