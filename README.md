@@ -35,6 +35,10 @@
   - **PUB / SUB & XPUB / XSUB**：多主题前缀订阅与本地过滤，支持构建层级发布订阅代理（Broker）；
   - **PUSH / PULL**：基于公平轮询（Round-Robin）与公平排队（Fair-Queuing）的高性能流水线分发；
   - **PAIR**：点对点排他低开销通信。
+- **高级调度与中介组件**：
+  - **RFC 43 可控消息代理 (`proxy`, `proxy_steerable`)**：支持全自动双向流量中继、旁路流量审计抓包（Capture）及控制通道动态暂停、恢复与终止（PAUSE / RESUME / TERMINATE）；
+  - **I/O 多路复用调度器 (`Poller`)**：在单协程内统一轮询多套接字，非阻塞探测 `POLLIN` / `POLLOUT` / `POLLERR`；
+  - **ZMTP 3.1 心跳检测 (`set_heartbeat`)**：支持定时 PING 探测、对端自动 PONG 响应与静默失活自动断连重连。
 - **企业级连接管理**：
   - 自动重连机制（支持可配置的初始重连间隔与指数退避上限）；
   - 高水位标记（`sndhwm` / `rcvhwm`）反压队列与丢弃策略；
@@ -224,69 +228,84 @@ Ran 18 tests in 6.678s
 OK (18 passed, 0 failed)
 ```
 
-- **MoonBit 单元/状态机/属性测试**：25/25 测试通过。
-- **官方 libzmq 双向互通测试**：18/18 测试通过。
+- **MoonBit 单元/状态机/属性/边界测试**：39/39 测试通过。
+- **官方 libzmq 双向互通与基准测试**：20/20 测试通过。
 
 ---
 
-## 编译目标与运行平台限制
+## 真实基准性能测试数据 (Benchmarks)
 
-`moon-zmq` **限定支持 Native 编译目标**（`--target native`），适用于 Linux、macOS 与 Windows。
+在本地原生 TCP 回环环境（Windows x86_64，Intel Core 处理器）下对 `moon-zmq` 开展系统性基准性能压测，涵盖小包至超大包（64B ~ 1MB）的单向流水线吞吐量与双向 RPC 往返延迟分位数统计：
 
-### 限制原因说明：
-ZeroMQ 协议基于操作系统原生的全双工 TCP 套接字与异步 I/O 驱动（BSD Sockets、IOCP、epoll、kqueue）。WebAssembly（浏览器端）与 JavaScript 宿主环境由于沙箱限制，无法在无网关中介的情况下开放原生 TCP 监听或建立全双工裸套接字连接。因此，将核心聚焦于 Native 目标是保证协议完整性、性能与工业可用性的最佳选择。
+### 1. PUSH / PULL 单向流水线吞吐量
 
-详细系统架构说明请参阅：[docs/design.md](docs/design.md)。
+| 消息载荷规格 | 传输批次 | 耗时 | 消息吞吐率 (msg/s) | 带宽吞吐率 (MB/s) |
+| :--- | :--- | :--- | :--- | :--- |
+| **64 Bytes** | 2,000 帧 | 81 ms | **24,691 msg/s** | 1.51 MB/s |
+| **1 KByte** | 1,000 帧 | 68 ms | **14,705 msg/s** | **14.36 MB/s** |
+| **64 KBytes** | 100 帧 | 369 ms | 271 msg/s | **16.94 MB/s** |
+| **1 MByte (超大帧)** | 10 帧 | 572 ms | 17 msg/s | **17.48 MB/s** |
 
----
+> 注：在跨语言互通基准测试中（Python pyzmq 生产 -> MoonBit PULL 接收），64B 小包吞吐率达到 **47,965 msg/s**（2.93 MB/s），64KB 吞吐带宽达到 **27.20 MB/s**。
 
-## 典型应用场景
+### 2. REQ / REP 双向往返延迟 (Round-Trip Latency Percentiles)
 
-### 场景一：MoonBit 核心服务与异构系统（Python、C++）的高性能低延迟 RPC 通信
-现代微服务与量化交易架构中，高频核心算法或服务模块使用 MoonBit 开发以获得类型安全与零 GC 停顿的极速性能，而数据挖掘、深度学习推理或既有业务中台通常基于 Python 或 C++ 构建。依托 `moon-zmq` 的 DEALER / ROUTER 或 REQ / REP 模式，MoonBit 模块可作为高吞吐的异步微服务与既有系统以亚毫秒级延迟交换数据。
+| 消息载荷规格 | 采样次数 (n) | Min | p50 (中位数) | p95 | p99 | Max | 平均延迟 (Avg) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **64 Bytes** | 500 次 | 0 ms | **0 ms** | **1 ms** | **1 ms** | 51 ms | **0.39 ms** |
+| **1 KByte** | 200 次 | 0 ms | **0 ms** | **1 ms** | **2 ms** | 2 ms | **0.32 ms** |
+| **64 KBytes** | 50 次 | 5 ms | **7 ms** | 20 ms | 88 ms | 88 ms | **9.58 ms** |
+| **1 MByte** | 10 次 | 66 ms | **93 ms** | 139 ms | 139 ms | 139 ms | **93.1 ms** |
 
-### 场景二：分布式流水线任务分发（Distributed Pipeline / Map-Reduce）
-在分布式计算、多节点矩阵并行运算与批量日志分析中，主节点采用 PUSH 套接字将海量任务公平轮询（Round-Robin）分发至局域网或云端的一组 MoonBit 工作进程（Worker Nodes），计算完毕后再通过 PULL 汇聚通道无损归集计算结果，实现弹性可伸缩的分布式流水线。
-
-### 场景三：高频金融行情广播与工业物联网（IoT）传感器数据发布订阅
-在金融交易行情分发系统或工业物联网边缘网关中，数据采集中心通过 PUB 套接字以纳秒级开销广播不同品种或传感器的数据流（如 `market.quote.BTC`、`sensor.pressure.station_1`）。众多下游终端各取所需，利用 SUB 套接字在网络管道层直接完成前缀订阅过滤，大幅减轻应用层的计算负载。
+> 注：在官方 libzmq（pyzmq）与 MoonBit 互通延迟测试中，64B 小包 RPC 往返延迟 **p50 仅为 0.10 ms**（100 微秒），p99 为 0.20 ms；1KB 包往返延迟 **p50 仅为 0.12 ms**。
 
 ---
 
 ## 运行示例工程
 
-仓库的 `examples/` 目录提供了 4 个开箱即用的完整独立示例工程：
+仓库的 `examples/` 目录提供了 6 个开箱即用的完整独立示例工程：
 
 ```bash
-# 1. 运行请求应答示例
+# 1. 运行请求应答示例 (REQ / REP)
 moon -C examples/req_rep run . --target native
 
-# 2. 运行发布订阅遥测示例
+# 2. 运行发布订阅遥测示例 (PUB / SUB)
 moon -C examples/pub_sub run . --target native
 
-# 3. 运行流水线任务分发示例
+# 3. 运行流水线任务分发示例 (PUSH / PULL)
 moon -C examples/pipeline run . --target native
 
-# 4. 运行路由代理中介示例
+# 4. 运行路由代理中介示例 (ROUTER / DEALER)
 moon -C examples/router_broker run . --target native
+
+# 5. 运行 RFC 43 可控消息代理与旁路抓包示例 (Proxy Broker)
+moon -C examples/proxy_broker run . --target native
+
+# 6. 运行 Poller 多路事件复用轮询示例 (Poller Multiplex)
+moon -C examples/poller_multiplex run . --target native
 ```
 
 ---
 
 ## 版本路线 (Roadmap)
 
-- **v0.1.0 (当前版本)**：
+- **v0.1.0 (已完成发布)**：
   - [x] ZMTP 3.1 帧编解码器、版本协商与 Greeting 握手；
   - [x] RFC 23 NULL 认证与 RFC 24 PLAIN 安全认证；
   - [x] 自动重连（指数退避）与 HWM 高水位反压队列；
   - [x] 10 种标准 Socket 模式（REQ/REP、PUB/SUB、XPUB/XSUB、PUSH/PULL、DEALER/ROUTER、PAIR）；
   - [x] 官方 libzmq (pyzmq) 双向互通自动化测试体系；
-  - [x] 4 大可执行示例工程。
-- **v0.2.0 (规划中)**：
-  - [ ] 基于 `Poller` 的多 Socket 统一异步轮询调度器；
-  - [ ] IPC (`ipc://`) 本地进程间通信协议支持。
+  - [x] 4 大基础可执行示例工程。
+- **v0.2.0 (当前重大升级版本)**：
+  - [x] RFC 43 可控消息代理与抓包转发器（`proxy`, `proxy_steerable`）；
+  - [x] 基于 `Poller` 的多 Socket 统一异步 I/O 事件多路复用调度器；
+  - [x] ZMTP 3.1 心跳检测（PING/PONG 周期探测与静默超时自动重连）；
+  - [x] 完备的基准性能测试套件（吞吐率达 47,000+ msg/s，RPC 往返延迟达 0.10 ms）；
+  - [x] 边界异常防御与故障注入测试套件（恶意包嗅探、高并发快速连接抖动防护）；
+  - [x] 新增 2 大高级架构示例工程（`proxy_broker`, `poller_multiplex`）。
 - **v1.0.0 (长期演进)**：
   - [ ] 待 MoonBit 生态正式发布经过审计的 Curve25519 库后，支持 RFC 25 CURVE 加密认证；
+  - [ ] IPC (`ipc://`) 本地命名管道与域套接字通信支持；
   - [ ] 零拷贝内存池与批量向量化发送优化。
 
 ---

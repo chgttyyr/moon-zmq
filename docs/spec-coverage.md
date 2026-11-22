@@ -16,7 +16,10 @@
 | **RFC 30** | PIPELINE（PUSH / PULL）管道模式 | **已完成** | 支持 PUSH 端公平轮询（Round-Robin）分发与 PULL 端公平接收（Fair-Queuing）。 |
 | **RFC 31** | ROUTER 套接字模式 | **已完成** | 异步多路复用、源节点 Identity 信封自动前缀附加、目标寻址投递与强制路由模式。 |
 | **RFC 32** | DEALER 套接字模式 | **已完成** | 全双工异步点对点轮询负载分发与接收。 |
+| **RFC 43** | ZeroMQ 可控代理与转发中介（Steerable Proxy） | **已完成** | 完整支持双向消息中继、可选流量审计旁路（Capture）及控制通道动态暂停/恢复/终止（PAUSE/RESUME/TERMINATE）。 |
 | **RFC 47** | XPUB / XSUB 扩展发布订阅模式 | **已完成** | 支持订阅/取消订阅消息向上游透明转发，满足构建发布订阅代理（Proxy/Broker）需求。 |
+| **RFC 37** | ZMTP 心跳保活机制（Heartbeating） | **已完成** | 支持可配置心跳周期（`heartbeat_ivl`）、活性超时（`heartbeat_timeout`）、PING/PONG 自动应答与静默超时自动重连。 |
+| **N/A** | Poller 多路事件复用调度器 | **已完成** | 统一管理多套接字，非阻塞轮询与超时等待（POLLIN / POLLOUT / POLLERR）。 |
 | **N/A** | PAIR 点对点独占模式 | **已完成** | 独占双向通道，无额外信封与多路路由开销。 |
 
 ---

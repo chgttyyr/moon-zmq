@@ -75,6 +75,9 @@
 ### 5. 公开接口层 (Context & Socket API)
 - 提供符合现代 ZeroMQ 使用习惯的上下文（`Context`）生命周期管理。
 - 线程安全与协程安全的消息载荷结构（`Message`），提供单帧及多帧消息（Multipart Message）的统一抽象。
+- **RFC 43 可控代理（`proxy`, `proxy_steerable`）**：实现全自动双向流量中继与可选抓包（Capture），支持通过 control 套接字实现运行时的 PAUSE / RESUME / TERMINATE 动态管控与流量统计（`ProxyStats`）。
+- **统一多路复用器（`Poller`）**：支持在单个异步协程中统一非阻塞轮询或超时等待多个不同类型的套接字，精准捕获 `POLLIN`、`POLLOUT`、`POLLERR` 事件。
+- **ZMTP 3.1 心跳保活与活性超时检测（`set_heartbeat`）**：支持按指定间隔发送 `PING` 命令帧，自动应答 `PONG`，并在静默超时后安全熔断连接并触发自动重连。
 
 ---
 
