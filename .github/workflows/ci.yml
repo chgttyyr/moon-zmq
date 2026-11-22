@@ -54,5 +54,14 @@ jobs:
       - name: Run Router/Dealer Example
         run: moon -C examples/router_broker run . --target native
 
+      - name: Run Proxy Broker Example
+        run: moon -C examples/proxy_broker run . --target native
+
+      - name: Run Poller Multiplex Example
+        run: moon -C examples/poller_multiplex run . --target native
+
       - name: Run pyzmq (libzmq) Bidirectional Interoperability Test Suite
         run: python -m unittest -v tests/interop/test_interop.py
+
+      - name: Run Cross-Language Benchmark Suite
+        run: python -m unittest -v tests/interop/test_benchmark.py
