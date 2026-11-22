@@ -175,6 +175,55 @@ async fn run_secure_auth() -> Unit {
 }
 ```
 
+### 4. RFC 43 可控消息代理与旁路抓包 (Proxy & Capture)
+
+```moonbit
+async fn run_proxy_broker() -> Unit {
+  @async.with_task_group(async fn(group) {
+    let ctx = @moon_zmq.Context::new()
+
+    // 1. 设置前端 ROUTER 与后端 DEALER
+    let frontend = ctx.socket(@moon_zmq.Router) catch { _ => return }
+    let f_ep = frontend.bind(group, "tcp://127.0.0.1:5559") catch { _ => return }
+
+    let backend = ctx.socket(@moon_zmq.Dealer) catch { _ => return }
+    let b_ep = backend.bind(group, "tcp://127.0.0.1:5560") catch { _ => return }
+
+    // 2. 启动代理转发任务（自动双向转发并输出审计日志）
+    let stats = @moon_zmq.ProxyStats::new()
+    group.spawn(no_wait=true, allow_failure=true, async fn() {
+      let _ = @moon_zmq.proxy_steerable(frontend, backend, stats~) catch { _ => () }
+    })
+
+    // 客户端连接 frontend (5559)，Worker 连接 backend (5560)，实现解耦路由
+  })
+}
+```
+
+### 5. I/O 多路复用调度 (Poller Multiplexing)
+
+```moonbit
+async fn run_poller_multiplex() -> Unit {
+  @async.with_task_group(async fn(group) {
+    let ctx = @moon_zmq.Context::new()
+    let sock1 = ctx.socket(@moon_zmq.Pull) catch { _ => return }
+    let sock2 = ctx.socket(@moon_zmq.Pair) catch { _ => return }
+
+    // 注册到 Poller
+    let poller = @moon_zmq.Poller::new()
+    poller.add(sock1, @moon_zmq.POLLIN)
+    poller.add(sock2, @moon_zmq.POLLIN)
+
+    // 非阻塞超时轮询
+    let ready_count = poller.poll(timeout_ms=50) catch { _ => 0 }
+    if poller.has_in(sock1) {
+      let msg = sock1.recv() catch { _ => return }
+      println("Channel 1 event: \{msg.first_string()}")
+    }
+  })
+}
+```
+
 ---
 
 ## 规范覆盖表
@@ -191,7 +240,10 @@ async fn run_secure_auth() -> Unit {
 | **RFC 30** | PIPELINE (PUSH / PULL) 规范 | **100% 完成** | 公平轮询（Round-Robin）分发与公平排队（Fair-Queuing）汇聚 |
 | **RFC 31** | ROUTER 套接字规范 | **100% 完成** | 异步多路复用、源节点 Identity 信封附加与目标寻址路由 |
 | **RFC 32** | DEALER 套接字规范 | **100% 完成** | 全双工异步点对点轮询负载分发与接收 |
+| **RFC 43** | ZeroMQ 可控代理与转发中介 | **100% 完成** | 双向流量中继、流量统计、可选旁路抓包与运行时 PAUSE/RESUME/TERMINATE 管控 |
 | **RFC 47** | XPUB / XSUB 扩展发布订阅 | **100% 完成** | 支持下游订阅/取消订阅指令向上游透明中继 |
+| **RFC 37** | ZMTP 心跳保活机制 | **100% 完成** | 周期 PING 探测、对端自动应答 PONG 与失活超时自动重连 |
+| **N/A** | Poller 多路 I/O 复用器 | **100% 完成** | 单协程统一非阻塞轮询与超时探测 POLLIN / POLLOUT / POLLERR |
 | **N/A** | PAIR 点对点独占模式 | **100% 完成** | 独占双向通道，零冗余信封开销 |
 
 完整逐条规范对标说明与技术分析，请参见面向开发者的正式文档：[docs/spec-coverage.md](docs/spec-coverage.md)。
