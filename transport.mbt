@@ -1,4 +1,22 @@
 ///|
+/// Lifecycle events emitted by a ZeroMQ socket for observability and monitoring.
+pub(all) enum SocketEvent {
+  Listening(String)
+  Accepted(Int32)
+  Connected(Int32)
+  Disconnected(Int32)
+  HandshakeSucceeded(String, Bytes)
+  HandshakeFailed(String)
+  Closed
+} derive(Eq, Debug)
+
+///|
+pub extend SocketEvent with Eq::{not_equal, equal}
+
+///|
+pub extend SocketEvent with @debug.Debug::{to_repr}
+
+///|
 /// Configurable options for a ZeroMQ socket and its underlying ZMTP transport.
 pub struct SocketOptions {
   mut identity : Bytes?
@@ -17,6 +35,7 @@ pub struct SocketOptions {
   mut heartbeat_ivl_ms : Int32
   mut heartbeat_timeout_ms : Int32
   mut heartbeat_ttl_ms : Int32
+  event_handlers : Array[(SocketEvent) -> Unit]
 }
 
 ///|
@@ -39,7 +58,17 @@ pub fn SocketOptions::new() -> SocketOptions {
     heartbeat_ivl_ms: 0,
     heartbeat_timeout_ms: 0,
     heartbeat_ttl_ms: 0,
+    event_handlers: [],
   }
+}
+
+///|
+/// Register a callback to receive `SocketEvent` lifecycle notifications.
+pub fn SocketOptions::on_event(
+  self : SocketOptions,
+  handler : (SocketEvent) -> Unit,
+) -> Unit {
+  self.event_handlers.push(handler)
 }
 
 ///|
@@ -395,6 +424,10 @@ pub struct TransportHub {
   mut reconnect_attempts : Int32
   mut handshake_failures : Int32
   mut last_auth_error : String?
+  mut messages_sent : Int64
+  mut messages_received : Int64
+  mut bytes_sent : Int64
+  mut bytes_received : Int64
   mut closed : Bool
 }
 
@@ -420,8 +453,70 @@ pub fn TransportHub::new(
     reconnect_attempts: 0,
     handshake_failures: 0,
     last_auth_error: None,
+    messages_sent: 0L,
+    messages_received: 0L,
+    bytes_sent: 0L,
+    bytes_received: 0L,
     closed: false,
   }
+}
+
+///|
+/// Emit a `SocketEvent` to all registered event observers.
+fn TransportHub::emit_event(self : TransportHub, event : SocketEvent) -> Unit {
+  for handler in self.options.event_handlers {
+    handler(event)
+  }
+}
+
+///|
+/// Total number of data messages sent through this transport hub.
+pub fn TransportHub::messages_sent(self : TransportHub) -> Int64 {
+  self.messages_sent
+}
+
+///|
+/// Total number of data messages received through this transport hub.
+pub fn TransportHub::messages_received(self : TransportHub) -> Int64 {
+  self.messages_received
+}
+
+///|
+/// Total payload bytes sent through this transport hub.
+pub fn TransportHub::bytes_sent(self : TransportHub) -> Int64 {
+  self.bytes_sent
+}
+
+///|
+/// Total payload bytes received through this transport hub.
+pub fn TransportHub::bytes_received(self : TransportHub) -> Int64 {
+  self.bytes_received
+}
+
+///|
+/// Array of all currently active peer pipe IDs.
+pub fn TransportHub::active_peer_ids(self : TransportHub) -> Array[Int32] {
+  let ids : Array[Int32] = []
+  for p in self.pipes {
+    if p.is_open() {
+      ids.push(p.id)
+    }
+  }
+  ids
+}
+
+///|
+/// Record a sent message and update metric counters.
+pub fn TransportHub::record_send(self : TransportHub, msg : Message) -> Unit {
+  self.messages_sent = self.messages_sent + 1L
+  self.bytes_sent = self.bytes_sent + msg.total_bytes().to_int64()
+}
+
+///|
+/// Record a received message and update metric counters.
+pub fn TransportHub::record_recv(self : TransportHub, msg : Message) -> Unit {
+  self.messages_received = self.messages_received + 1L
+  self.bytes_received = self.bytes_received + msg.total_bytes().to_int64()
 }
 
 ///|
@@ -475,6 +570,7 @@ fn TransportHub::detach_pipe(self : TransportHub, pipe_id : Int32) -> Unit {
       }
     }
     p.close()
+    self.emit_event(Disconnected(pipe_id))
   }
 }
 
@@ -652,11 +748,13 @@ async fn TransportHub::run_peer_connection(
         return
       }
       self.handshake_failures = self.handshake_failures + 1
-      match err {
-        AuthFailed(reason) => self.last_auth_error = Some(reason)
-        ProtocolError(reason) => self.last_auth_error = Some(reason)
-        _ => ()
+      let reason = match err {
+        AuthFailed(r) => r
+        ProtocolError(r) => r
+        _ => "handshake failed"
       }
+      self.last_auth_error = Some(reason)
+      self.emit_event(HandshakeFailed(reason))
       return
     }
   }
@@ -672,6 +770,10 @@ async fn TransportHub::run_peer_connection(
     rcvhwm=self.options.rcvhwm,
   )
   self.pipes.push(pipe)
+  self.emit_event(Connected(pipe_id))
+  self.emit_event(
+    HandshakeSucceeded(hs.peer_meta.socket_type, pipe.peer_identity),
+  )
   let _ = self.pipe_ready_notify.try_put(pipe_id) catch { _ => false }
 
   // Spawn writer coroutine for this pipe
@@ -835,6 +937,7 @@ pub async fn TransportHub::bind(
     }
   })
   self.tasks.push(accept_task)
+  self.emit_event(Listening(bound_endpoint))
   bound_endpoint
 }
 
@@ -1015,6 +1118,7 @@ pub fn TransportHub::close(self : TransportHub) -> Unit {
     return
   }
   self.closed = true
+  self.emit_event(Closed)
   self.inbound_notify.close(clear=true)
   self.pipe_ready_notify.close(clear=true)
   self.sub_events.close(clear=true)

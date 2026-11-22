@@ -78,6 +78,8 @@
 - **RFC 43 可控代理（`proxy`, `proxy_steerable`）**：实现全自动双向流量中继与可选抓包（Capture），支持通过 control 套接字实现运行时的 PAUSE / RESUME / TERMINATE 动态管控与流量统计（`ProxyStats`）。
 - **统一多路复用器（`Poller`）**：支持在单个异步协程中统一非阻塞轮询或超时等待多个不同类型的套接字，精准捕获 `POLLIN`、`POLLOUT`、`POLLERR` 事件。
 - **ZMTP 3.1 心跳保活与活性超时检测（`set_heartbeat`）**：支持按指定间隔发送 `PING` 命令帧，自动应答 `PONG`，并在静默超时后安全熔断连接并触发自动重连。
+- **套接字生命周期事件监听（`SocketEvent`）**：提供细粒度的事件捕获与生命周期监控（`Listening`、`Accepted`、`Connected`、`Disconnected`、`HandshakeSucceeded`、`HandshakeFailed`、`Closed`），全面支持链路健康探针与分布式可观测性诊断。
+- **实时流量指标与批量 I/O（`send_batch` / `recv_batch`）**：套接字内置收发消息数、字节数以及活跃 Peer 列表的零成本统计；提供批量消息处理接口，在高吞吐并发场景下大幅减少跨协程上下文切换。
 
 ---
 

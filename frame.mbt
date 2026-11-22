@@ -243,6 +243,84 @@ pub fn Message::first_string(self : Message) -> String {
 }
 
 ///|
+/// Whether this message has no payload frames.
+pub fn Message::is_empty(self : Message) -> Bool {
+  self.frames.is_empty()
+}
+
+///|
+/// Number of frames in this message.
+pub fn Message::frame_count(self : Message) -> Int32 {
+  self.frames.length()
+}
+
+///|
+/// Total payload byte count across all frames.
+pub fn Message::total_bytes(self : Message) -> Int32 {
+  let mut total = 0
+  for f in self.frames {
+    total = total + f.length()
+  }
+  total
+}
+
+///|
+/// Get the frame payload at `index` (0-based), or `None` if out of bounds.
+pub fn Message::frame_at(self : Message, index : Int32) -> Bytes? {
+  if index >= 0 && index < self.frames.length() {
+    Some(self.frames[index])
+  } else {
+    None
+  }
+}
+
+///|
+/// Get the string representation of the frame at `index`, or `None` if out of bounds.
+pub fn Message::frame_string_at(self : Message, index : Int32) -> String? {
+  match self.frame_at(index) {
+    Some(b) => Some(ascii_bytes_to_string(b))
+    None => None
+  }
+}
+
+///|
+/// Create a new `Message` with an additional frame appended at the end.
+pub fn Message::add_frame(self : Message, frame : Bytes) -> Message {
+  let copy : Array[Bytes] = Array(capacity=self.frames.length() + 1)
+  for f in self.frames {
+    copy.push(f)
+  }
+  copy.push(frame)
+  { frames: copy, }
+}
+
+///|
+/// Create a new `Message` with an additional string frame appended at the end.
+pub fn Message::add_string(self : Message, str : String) -> Message {
+  self.add_frame(string_to_ascii_bytes(str))
+}
+
+///|
+/// Construct a multipart message from an array of string frames.
+pub fn Message::from_strings(strings : Array[String]) -> Message {
+  let frames : Array[Bytes] = Array(capacity=strings.length())
+  for s in strings {
+    frames.push(string_to_ascii_bytes(s))
+  }
+  Message::multipart(frames)
+}
+
+///|
+/// Convert all frames into an array of strings.
+pub fn Message::to_string_array(self : Message) -> Array[String] {
+  let arr : Array[String] = Array(capacity=self.frames.length())
+  for f in self.frames {
+    arr.push(ascii_bytes_to_string(f))
+  }
+  arr
+}
+
+///|
 /// Encode a multipart message into ZMTP 3.1 wire bytes, setting `MORE=1` on all
 /// frames except the final frame.
 pub fn Message::encode(self : Message) -> Bytes {

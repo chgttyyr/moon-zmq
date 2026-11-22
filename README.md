@@ -38,6 +38,8 @@
 - **高级调度与中介组件**：
   - **RFC 43 可控消息代理 (`proxy`, `proxy_steerable`)**：支持全自动双向流量中继、旁路流量审计抓包（Capture）及控制通道动态暂停、恢复与终止（PAUSE / RESUME / TERMINATE）；
   - **I/O 多路复用调度器 (`Poller`)**：在单协程内统一轮询多套接字，非阻塞探测 `POLLIN` / `POLLOUT` / `POLLERR`；
+  - **套接字生命周期监听 (`SocketEvent` & `monitor_events`)**：对标官方 `zmq_socket_monitor`，捕获 `Listening`、`Connected`、`Accepted`、`HandshakeSucceeded`、`Disconnected`、`Closed` 事件；
+  - **生产级批量与遥测支持**：提供 `send_batch` 与 `recv_batch` 批量收发，内置实时流量指标（`messages_sent`, `bytes_sent`, `messages_received`, `bytes_received`）；
   - **ZMTP 3.1 心跳检测 (`set_heartbeat`)**：支持定时 PING 探测、对端自动 PONG 响应与静默失活自动断连重连。
 - **企业级连接管理**：
   - 自动重连机制（支持可配置的初始重连间隔与指数退避上限）；
@@ -280,7 +282,7 @@ Ran 18 tests in 6.678s
 OK (18 passed, 0 failed)
 ```
 
-- **MoonBit 单元/状态机/属性/边界测试**：39/39 测试通过。
+- **MoonBit 单元/状态机/属性/边界测试**：42/42 测试通过。
 - **官方 libzmq 双向互通与基准测试**：20/20 测试通过。
 
 ---
@@ -293,21 +295,21 @@ OK (18 passed, 0 failed)
 
 | 消息载荷规格 | 传输批次 | 耗时 | 消息吞吐率 (msg/s) | 带宽吞吐率 (MB/s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **64 Bytes** | 2,000 帧 | 81 ms | **24,691 msg/s** | 1.51 MB/s |
-| **1 KByte** | 1,000 帧 | 68 ms | **14,705 msg/s** | **14.36 MB/s** |
-| **64 KBytes** | 100 帧 | 369 ms | 271 msg/s | **16.94 MB/s** |
-| **1 MByte (超大帧)** | 10 帧 | 572 ms | 17 msg/s | **17.48 MB/s** |
+| **64 Bytes** | 2,000 帧 | 80 ms | **25,000 msg/s** | 1.53 MB/s |
+| **1 KByte** | 1,000 帧 | 67 ms | **14,925 msg/s** | **14.58 MB/s** |
+| **64 KBytes** | 100 帧 | 357 ms | 280 msg/s | **17.51 MB/s** |
+| **1 MByte (超大帧)** | 10 帧 | 539 ms | 18 msg/s | **18.55 MB/s** |
 
-> 注：在跨语言互通基准测试中（Python pyzmq 生产 -> MoonBit PULL 接收），64B 小包吞吐率达到 **47,965 msg/s**（2.93 MB/s），64KB 吞吐带宽达到 **27.20 MB/s**。
+> 注：在跨语言互通基准测试中（Python pyzmq 生产 -> MoonBit PULL 接收），64B 小包吞吐率达到 **37,679 ~ 47,965 msg/s**，64KB 吞吐带宽达到 **24.67 ~ 27.20 MB/s**，1MB 超大帧带宽达到 **31.26 MB/s**。
 
 ### 2. REQ / REP 双向往返延迟 (Round-Trip Latency Percentiles)
 
 | 消息载荷规格 | 采样次数 (n) | Min | p50 (中位数) | p95 | p99 | Max | 平均延迟 (Avg) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **64 Bytes** | 500 次 | 0 ms | **0 ms** | **1 ms** | **1 ms** | 51 ms | **0.39 ms** |
-| **1 KByte** | 200 次 | 0 ms | **0 ms** | **1 ms** | **2 ms** | 2 ms | **0.32 ms** |
-| **64 KBytes** | 50 次 | 5 ms | **7 ms** | 20 ms | 88 ms | 88 ms | **9.58 ms** |
-| **1 MByte** | 10 次 | 66 ms | **93 ms** | 139 ms | 139 ms | 139 ms | **93.1 ms** |
+| **64 Bytes** | 500 次 | 0 ms | **0 ms** | **1 ms** | **1 ms** | 8 ms | **0.29 ms** |
+| **1 KByte** | 200 次 | 0 ms | **0 ms** | **1 ms** | **2 ms** | 50 ms | **0.58 ms** |
+| **64 KBytes** | 50 次 | 5 ms | **7 ms** | 25 ms | 86 ms | 86 ms | **10.08 ms** |
+| **1 MByte** | 10 次 | 69 ms | **101 ms** | 124 ms | 124 ms | 124 ms | **95.6 ms** |
 
 > 注：在官方 libzmq（pyzmq）与 MoonBit 互通延迟测试中，64B 小包 RPC 往返延迟 **p50 仅为 0.10 ms**（100 微秒），p99 为 0.20 ms；1KB 包往返延迟 **p50 仅为 0.12 ms**。
 
@@ -315,7 +317,7 @@ OK (18 passed, 0 failed)
 
 ## 运行示例工程
 
-仓库的 `examples/` 目录提供了 6 个开箱即用的完整独立示例工程：
+仓库的 `examples/` 目录提供了 7 个开箱即用的完整独立示例工程：
 
 ```bash
 # 1. 运行请求应答示例 (REQ / REP)
@@ -335,6 +337,9 @@ moon -C examples/proxy_broker run . --target native
 
 # 6. 运行 Poller 多路事件复用轮询示例 (Poller Multiplex)
 moon -C examples/poller_multiplex run . --target native
+
+# 7. 运行套接字生命周期监听与流量度量示例 (Socket Monitor)
+moon -C examples/socket_monitor run . --target native
 ```
 
 ---
@@ -351,10 +356,12 @@ moon -C examples/poller_multiplex run . --target native
 - **v0.2.0 (当前重大升级版本)**：
   - [x] RFC 43 可控消息代理与抓包转发器（`proxy`, `proxy_steerable`）；
   - [x] 基于 `Poller` 的多 Socket 统一异步 I/O 事件多路复用调度器；
+  - [x] 套接字生命周期事件监听 (`SocketEvent` & `monitor_events`，对标 `zmq_socket_monitor`)；
+  - [x] 批量收发 (`send_batch`, `recv_batch`) 与运行时实时流量统计指标；
   - [x] ZMTP 3.1 心跳检测（PING/PONG 周期探测与静默超时自动重连）；
   - [x] 完备的基准性能测试套件（吞吐率达 47,000+ msg/s，RPC 往返延迟达 0.10 ms）；
   - [x] 边界异常防御与故障注入测试套件（恶意包嗅探、高并发快速连接抖动防护）；
-  - [x] 新增 2 大高级架构示例工程（`proxy_broker`, `poller_multiplex`）。
+  - [x] 新增 3 大高级架构示例工程（`proxy_broker`, `poller_multiplex`, `socket_monitor`）。
 - **v1.0.0 (长期演进)**：
   - [ ] 待 MoonBit 生态正式发布经过审计的 Curve25519 库后，支持 RFC 25 CURVE 加密认证；
   - [ ] IPC (`ipc://`) 本地命名管道与域套接字通信支持；

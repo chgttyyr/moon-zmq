@@ -60,6 +60,9 @@ jobs:
       - name: Run Poller Multiplex Example
         run: moon -C examples/poller_multiplex run . --target native
 
+      - name: Run Socket Monitor Example
+        run: moon -C examples/socket_monitor run . --target native
+
       - name: Run pyzmq (libzmq) Bidirectional Interoperability Test Suite
         run: python -m unittest -v tests/interop/test_interop.py
 

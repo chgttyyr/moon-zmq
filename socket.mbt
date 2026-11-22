@@ -273,6 +273,7 @@ pub async fn Socket::send(
   if self.closed {
     raise Closed
   }
+  self.hub.record_send(msg)
   match self.socket_type {
     Req =>
       match self.req_state {
@@ -347,6 +348,13 @@ pub async fn Socket::send_bytes(
 ///|
 /// Receive a `Message` according to this socket's pattern semantics.
 pub async fn Socket::recv(self : Socket) -> Message raise ZmqError {
+  let msg = self.recv_internal()
+  self.hub.record_recv(msg)
+  msg
+}
+
+///|
+async fn Socket::recv_internal(self : Socket) -> Message raise ZmqError {
   if self.closed {
     raise Closed
   }
@@ -453,4 +461,92 @@ pub fn Socket::close(self : Socket) -> Unit {
   }
   self.closed = true
   self.hub.close()
+}
+
+///|
+/// Send an array of messages sequentially in a single batch operation.
+pub async fn Socket::send_batch(
+  self : Socket,
+  messages : Array[Message],
+  policy~ : HwmPolicy = BlockOnFull,
+) -> Int32 raise ZmqError {
+  if self.closed {
+    raise Closed
+  }
+  let mut count = 0
+  for msg in messages {
+    self.send(msg, policy~)
+    count = count + 1
+  }
+  count
+}
+
+///|
+/// Receive up to `max_count` available messages in a single batch operation.
+/// Asynchronously waits for at least the first message, then non-blockingly drains any ready messages.
+pub async fn Socket::recv_batch(
+  self : Socket,
+  max_count~ : Int32 = 100,
+) -> Array[Message] raise ZmqError {
+  if self.closed {
+    raise Closed
+  }
+  if max_count <= 0 {
+    return []
+  }
+  let batch : Array[Message] = []
+  let first = self.recv()
+  batch.push(first)
+  while batch.length() < max_count && self.can_recv() {
+    let next_msg = self.recv()
+    batch.push(next_msg)
+  }
+  batch
+}
+
+///|
+/// Register a callback to receive `SocketEvent` lifecycle notifications.
+pub fn Socket::on_event(self : Socket, handler : (SocketEvent) -> Unit) -> Unit {
+  self.options.on_event(handler)
+}
+
+///|
+/// Create an asynchronous queue that receives all `SocketEvent` occurrences for this socket.
+pub fn Socket::monitor_events(
+  self : Socket,
+  capacity~ : Int32 = 100,
+) -> @aqueue.Queue[SocketEvent] {
+  let q : @aqueue.Queue[SocketEvent] = @aqueue.Queue(kind=Blocking(capacity))
+  self.on_event(fn(ev) { let _ = q.try_put(ev) catch { _ => false } })
+  q
+}
+
+///|
+/// Total number of messages sent by this socket.
+pub fn Socket::messages_sent(self : Socket) -> Int64 {
+  self.hub.messages_sent()
+}
+
+///|
+/// Total number of messages received by this socket.
+pub fn Socket::messages_received(self : Socket) -> Int64 {
+  self.hub.messages_received()
+}
+
+///|
+/// Total payload bytes sent by this socket.
+pub fn Socket::bytes_sent(self : Socket) -> Int64 {
+  self.hub.bytes_sent()
+}
+
+///|
+/// Total payload bytes received by this socket.
+pub fn Socket::bytes_received(self : Socket) -> Int64 {
+  self.hub.bytes_received()
+}
+
+///|
+/// List of IDs of all currently active peer connections.
+pub fn Socket::active_peer_ids(self : Socket) -> Array[Int32] {
+  self.hub.active_peer_ids()
 }
