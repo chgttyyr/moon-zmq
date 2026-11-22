@@ -1,7 +1,6 @@
 ///|
 /// Publish-Subscribe (PUB/SUB) Example in MoonBit
 /// Demonstrates multi-topic broadcasting with client-side prefix subscription filtering.
-
 async fn main {
   println("=== ZeroMQ PUB/SUB Telemetry Example in MoonBit ===")
 
@@ -52,17 +51,23 @@ async fn main {
     // 4. Publish messages across different topics
     println("[Publisher] Publishing weather and market telemetry...")
     let _ = pub_sock.send(
-      @moon_zmq.Message::from_string("weather.beijing temperature=22.5C humidity=45%"),
+      @moon_zmq.Message::from_string(
+        "weather.beijing temperature=22.5C humidity=45%",
+      ),
     ) catch {
       _ => ()
     }
     let _ = pub_sock.send(
-      @moon_zmq.Message::from_string("market.quote symbol=MOON price=128.50 volume=50000"),
+      @moon_zmq.Message::from_string(
+        "market.quote symbol=MOON price=128.50 volume=50000",
+      ),
     ) catch {
       _ => ()
     }
     let _ = pub_sock.send(
-      @moon_zmq.Message::from_string("internal.metrics gc_pause=1.2ms heap=16MB"),
+      @moon_zmq.Message::from_string(
+        "internal.metrics gc_pause=1.2ms heap=16MB",
+      ),
     ) catch {
       _ => ()
     }
@@ -84,7 +89,9 @@ async fn main {
     }
     println("[Market Subscriber] Received: '\{stock_msg.first_string()}'")
 
-    println("[Info] 'internal.metrics' was correctly ignored by both subscribers.")
+    println(
+      "[Info] 'internal.metrics' was correctly ignored by both subscribers.",
+    )
 
     sub_weather.close()
     sub_stocks.close()

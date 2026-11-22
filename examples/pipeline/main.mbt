@@ -1,7 +1,6 @@
 ///|
 /// Pipeline (PUSH/PULL) Task Distribution Example in MoonBit
 /// Demonstrates high-throughput parallel compute dispatch and fair queuing worker collection.
-
 async fn main {
   println("=== ZeroMQ PUSH/PULL Pipeline Example in MoonBit ===")
 

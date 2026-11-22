@@ -24,7 +24,7 @@ pub extend ZmqError with @debug.Debug::{to_repr}
 pub extend ZmqError with Show::{to_string, output}
 
 ///|
-pub impl Show for ZmqError with output(self, logger) {
+pub impl Show for ZmqError with fn output(self, logger) {
   match self {
     ProtocolError(msg) => logger.write_string("ProtocolError(\{msg})")
     FrameTooLarge(sz) => logger.write_string("FrameTooLarge(\{sz})")
@@ -39,7 +39,6 @@ pub impl Show for ZmqError with output(self, logger) {
     IoError(msg) => logger.write_string("IoError(\{msg})")
   }
 }
-
 
 ///|
 /// Frame flag bits defined by ZMTP 3.1 (RFC 23 Section 3.1).

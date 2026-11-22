@@ -1,7 +1,6 @@
 ///|
 /// Asynchronous Message Broker (ROUTER / DEALER) Example in MoonBit
 /// Demonstrates non-blocking identity routing between heterogeneous clients and backend workers.
-
 async fn main {
   println("=== ZeroMQ ROUTER / DEALER Message Broker Example in MoonBit ===")
 
@@ -38,11 +37,10 @@ async fn main {
     }
 
     // 3. Client sends request through dealer (empty delimiter + payload)
-    println("[Client-Alpha] Sending async RPC request: 'query_user_profile(id=1001)'")
-    let client_req : Array[Bytes] = [
-      b"",
-      b"query_user_profile(id=1001)",
-    ]
+    println(
+      "[Client-Alpha] Sending async RPC request: 'query_user_profile(id=1001)'",
+    )
+    let client_req : Array[Bytes] = [b"", b"query_user_profile(id=1001)"]
     let _ = client.send(@moon_zmq.Message::multipart(client_req)) catch {
       err => {
         println("Client send error: \{err}")

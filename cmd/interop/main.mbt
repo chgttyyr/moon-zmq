@@ -1,7 +1,6 @@
 ///|
 /// Comprehensive interop test binary supporting all ZMTP 3.1 socket patterns
 /// and security mechanisms to verify bidirectional interoperability with libzmq/pyzmq.
-
 async fn main {
   let matches = @argparse.Command(
     "interop",
@@ -39,7 +38,9 @@ async fn main {
         let req = sock.recv() catch { _ => return }
         let req_str = req.first_string()
         println("RECV:\{req_str}")
-        let _ = sock.send(@moon_zmq.Message::from_string("echo:\{req_str}")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("echo:\{req_str}")) catch {
+          _ => return
+        }
         println("SENT")
         @async.sleep(50)
         sock.close()
@@ -50,7 +51,9 @@ async fn main {
         while sock.active_peer_count() < 1 {
           @async.sleep(10)
         }
-        let _ = sock.send(@moon_zmq.Message::from_string("hello_from_mbt")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("hello_from_mbt")) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         println("REPLY:\{rep.first_string()}")
         sock.close()
@@ -64,8 +67,14 @@ async fn main {
           @async.sleep(20)
         }
         @async.sleep(100)
-        let _ = sock.send(@moon_zmq.Message::from_string("alerts.disk Disk full")) catch { _ => return }
-        let _ = sock.send(@moon_zmq.Message::from_string("metrics.cpu 85")) catch { _ => return }
+        let _ = sock.send(
+          @moon_zmq.Message::from_string("alerts.disk Disk full"),
+        ) catch {
+          _ => return
+        }
+        let _ = sock.send(@moon_zmq.Message::from_string("metrics.cpu 85")) catch {
+          _ => return
+        }
         println("PUBLISHED")
         @async.sleep(100)
         sock.close()
@@ -87,7 +96,9 @@ async fn main {
           @async.sleep(20)
         }
         @async.sleep(50)
-        let _ = sock.send(@moon_zmq.Message::from_string("task_data_42")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("task_data_42")) catch {
+          _ => return
+        }
         println("PUSHED")
         @async.sleep(50)
         sock.close()
@@ -114,7 +125,9 @@ async fn main {
         while sock.active_peer_count() < 1 {
           @async.sleep(10)
         }
-        let _ = sock.send(@moon_zmq.Message::from_string("task_from_mbt_push")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("task_from_mbt_push")) catch {
+          _ => return
+        }
         println("PUSHED")
         @async.sleep(50)
         sock.close()
@@ -138,7 +151,9 @@ async fn main {
           b"",
           @moon_zmq.string_to_ascii_bytes("router_echo:\{payload_str}"),
         ]
-        let _ = sock.send(@moon_zmq.Message::multipart(reply_frames)) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::multipart(reply_frames)) catch {
+          _ => return
+        }
         println("ROUTER_SENT")
         @async.sleep(50)
         sock.close()
@@ -150,7 +165,9 @@ async fn main {
           @async.sleep(10)
         }
         let req_frames : Array[Bytes] = [b"", b"dealer_msg"]
-        let _ = sock.send(@moon_zmq.Message::multipart(req_frames)) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::multipart(req_frames)) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         // Last frame is payload
         let last_frame = rep.frames[rep.frames.length() - 1]
@@ -164,7 +181,11 @@ async fn main {
         let msg = sock.recv() catch { _ => return }
         let msg_str = msg.first_string()
         println("PAIR_RECV:\{msg_str}")
-        let _ = sock.send(@moon_zmq.Message::from_string("pair_pong:\{msg_str}")) catch { _ => return }
+        let _ = sock.send(
+          @moon_zmq.Message::from_string("pair_pong:\{msg_str}"),
+        ) catch {
+          _ => return
+        }
         @async.sleep(50)
         sock.close()
       }
@@ -174,7 +195,9 @@ async fn main {
         while sock.active_peer_count() < 1 {
           @async.sleep(10)
         }
-        let _ = sock.send(@moon_zmq.Message::from_string("pair_ping")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("pair_ping")) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         println("PAIR_REPLY:\{rep.first_string()}")
         sock.close()
@@ -192,7 +215,9 @@ async fn main {
           rev.push(req.frames[i])
           i = i - 1
         }
-        let _ = sock.send(@moon_zmq.Message::multipart(rev)) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::multipart(rev)) catch {
+          _ => return
+        }
         @async.sleep(50)
         sock.close()
       }
@@ -203,7 +228,9 @@ async fn main {
           @async.sleep(10)
         }
         let frames : Array[Bytes] = [b"part1", b"part2", b"part3"]
-        let _ = sock.send(@moon_zmq.Message::multipart(frames)) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::multipart(frames)) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         println("MP_REPLY_FRAMES:\{rep.frames.length()}")
         for f in rep.frames {
@@ -218,7 +245,11 @@ async fn main {
         let req = sock.recv() catch { _ => return }
         let total_len = req.frames[0].length()
         println("BIG_RECV_LEN:\{total_len}")
-        let _ = sock.send(@moon_zmq.Message::from_string("big_ack:\{total_len}")) catch { _ => return }
+        let _ = sock.send(
+          @moon_zmq.Message::from_string("big_ack:\{total_len}"),
+        ) catch {
+          _ => return
+        }
         @async.sleep(50)
         sock.close()
       }
@@ -234,7 +265,9 @@ async fn main {
         for i = 0; i < size; i = i + 1 {
           buf.push(b'A')
         }
-        let _ = sock.send(@moon_zmq.Message::from_bytes(Bytes::from_array(buf))) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_bytes(Bytes::from_array(buf))) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         println("BIG_REPLY:\{rep.first_string()}")
         sock.close()
@@ -249,7 +282,9 @@ async fn main {
         println("READY")
         let req = sock.recv() catch { _ => return }
         println("PLAIN_RECV:\{req.first_string()}")
-        let _ = sock.send(@moon_zmq.Message::from_string("plain_auth_ok")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("plain_auth_ok")) catch {
+          _ => return
+        }
         @async.sleep(50)
         sock.close()
       }
@@ -260,7 +295,9 @@ async fn main {
         while sock.active_peer_count() < 1 {
           @async.sleep(10)
         }
-        let _ = sock.send(@moon_zmq.Message::from_string("secure_hello")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("secure_hello")) catch {
+          _ => return
+        }
         let rep = sock.recv() catch { _ => return }
         println("PLAIN_REPLY:\{rep.first_string()}")
         sock.close()
@@ -273,7 +310,9 @@ async fn main {
           @async.sleep(10)
         }
         // Request 1
-        let _ = sock.send(@moon_zmq.Message::from_string("req_1")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("req_1")) catch {
+          _ => return
+        }
         let rep1 = sock.recv() catch { _ => return }
         println("REPLY1:\{rep1.first_string()}")
 
@@ -284,7 +323,9 @@ async fn main {
         }
 
         // Request 2
-        let _ = sock.send(@moon_zmq.Message::from_string("req_2")) catch { _ => return }
+        let _ = sock.send(@moon_zmq.Message::from_string("req_2")) catch {
+          _ => return
+        }
         let rep2 = sock.recv() catch { _ => return }
         println("REPLY2:\{rep2.first_string()}")
         sock.close()

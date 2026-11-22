@@ -919,6 +919,34 @@ pub async fn TransportHub::recv_fair_queue(
 }
 
 ///|
+/// Check whether any connected pipe has an inbound message ready to read without blocking.
+pub fn TransportHub::can_recv(self : TransportHub) -> Bool {
+  if self.closed {
+    return false
+  }
+  for p in self.pipes {
+    if p.has_inbound() {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Check whether any connected pipe is capable of accepting an outbound message without blocking.
+pub fn TransportHub::can_send(self : TransportHub) -> Bool {
+  if self.closed || self.pipes.is_empty() {
+    return false
+  }
+  for p in self.pipes {
+    if p.can_send() {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Close all listeners, active connections, pipes, and background tasks.
 pub fn TransportHub::close(self : TransportHub) -> Unit {
   if self.closed {

@@ -1,7 +1,6 @@
 ///|
 /// Request-Reply (REQ/REP) Example in MoonBit
 /// Demonstrates synchronized request-response exchange with automatic envelope handling.
-
 async fn main {
   println("=== ZeroMQ REQ/REP Example in MoonBit ===")
 

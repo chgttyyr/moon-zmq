@@ -40,14 +40,33 @@ pub fn Context::term(self : Context) -> Unit {
 }
 
 ///|
+let next_socket_id : Ref[Int32] = { val: 1, }
+
+///|
+fn allocate_socket_id() -> Int32 {
+  let id = next_socket_id.val
+  next_socket_id.val = next_socket_id.val + 1
+  id
+}
+
+///|
 /// High-level ZeroMQ `Socket` implementing ZMTP 3.1 messaging patterns.
 pub struct Socket {
+  id : Int32
   socket_type : SocketType
   options : SocketOptions
   hub : TransportHub
   priv mut req_state : ReqState
   priv mut rep_state : RepState
   mut closed : Bool
+}
+
+///|
+pub extend Socket with Eq::{not_equal, equal}
+
+///|
+pub impl Eq for Socket with fn equal(self, other) {
+  self.id == other.id
 }
 
 ///|
@@ -58,6 +77,7 @@ pub fn Socket::new(
 ) -> Socket {
   let hub = TransportHub::new(socket_type, options~)
   {
+    id: allocate_socket_id(),
     socket_type,
     options,
     hub,
@@ -65,6 +85,79 @@ pub fn Socket::new(
     rep_state: RecvReady,
     closed: false,
   }
+}
+
+///|
+/// Unique numeric identifier of this `Socket`.
+pub fn Socket::id(self : Socket) -> Int32 {
+  self.id
+}
+
+///|
+/// Whether this `Socket` has been closed.
+pub fn Socket::is_closed(self : Socket) -> Bool {
+  self.closed
+}
+
+///|
+/// Whether this `Socket` can perform a non-blocking receive operation.
+pub fn Socket::can_recv(self : Socket) -> Bool {
+  if self.closed {
+    return false
+  }
+  match self.socket_type {
+    Push => false
+    Req =>
+      match self.req_state {
+        WaitReply(p) => p.has_inbound()
+        _ => false
+      }
+    Rep =>
+      match self.rep_state {
+        RecvReady => self.hub.can_recv()
+        _ => false
+      }
+    XPub => self.hub.can_recv()
+    _ => self.hub.can_recv()
+  }
+}
+
+///|
+/// Whether this `Socket` can perform a non-blocking send operation.
+pub fn Socket::can_send(self : Socket) -> Bool {
+  if self.closed {
+    return false
+  }
+  match self.socket_type {
+    Pull => false
+    Req =>
+      match self.req_state {
+        SendReady => self.hub.can_send()
+        _ => false
+      }
+    Rep =>
+      match self.rep_state {
+        SendReply(_, _) => self.hub.can_send()
+        _ => false
+      }
+    _ => self.hub.can_send()
+  }
+}
+
+///|
+/// Evaluate which events among requested `events` (`POLLIN`, `POLLOUT`, `POLLERR`) are currently ready.
+pub fn Socket::has_events(self : Socket, events : Int32) -> Int32 {
+  if self.closed {
+    return if (events & 0x04) != 0 { 0x04 } else { 0 }
+  }
+  let mut revents : Int32 = 0
+  if (events & 0x01) != 0 && self.can_recv() {
+    revents = revents | 0x01
+  }
+  if (events & 0x02) != 0 && self.can_send() {
+    revents = revents | 0x02
+  }
+  revents
 }
 
 ///|
