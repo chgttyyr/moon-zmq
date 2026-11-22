@@ -141,7 +141,7 @@ async fn perform_plain_handshake_server(
 ) -> HandshakeResult raise ZmqError {
   let server_greet = Greeting::new(mechanism="PLAIN", as_server=true).encode()
   conn.write(server_greet) catch {
-    err => raise IoError("server failed writing PLAIN greeting: \{err}")
+    _ => raise IoError("server failed writing PLAIN greeting")
   }
 
   // Read peer greeting
@@ -149,7 +149,7 @@ async fn perform_plain_handshake_server(
   let leftover : Array[Byte] = []
   while greet_buf.length() < 64 {
     let chunk = conn.read() catch {
-      err => raise IoError("server failed reading client greeting: \{err}")
+      _ => raise IoError("server failed reading client greeting")
     }
     match chunk {
       Some(b) => {
@@ -205,7 +205,7 @@ async fn perform_plain_handshake_server(
     }
     if creds is None {
       let chunk = conn.read() catch {
-        err => raise IoError("failed reading HELLO frame: \{err}")
+        _ => raise IoError("failed reading HELLO frame")
       }
       match chunk {
         Some(b) => {
@@ -241,7 +241,7 @@ async fn perform_plain_handshake_server(
 
   // Send WELCOME to client
   conn.write(encode_plain_welcome()) catch {
-    err => raise IoError("failed writing PLAIN WELCOME: \{err}")
+    _ => raise IoError("failed writing PLAIN WELCOME")
   }
 
   // Step 2: Await INITIATE command from client
@@ -281,7 +281,7 @@ async fn perform_plain_handshake_server(
     }
     if peer_meta is None {
       let chunk = conn.read() catch {
-        err => raise IoError("failed reading INITIATE frame: \{err}")
+        _ => raise IoError("failed reading INITIATE frame")
       }
       match chunk {
         Some(b) => {
@@ -303,7 +303,7 @@ async fn perform_plain_handshake_server(
     identity=options.identity,
   )
   conn.write(ZmtpCommand::Ready(local_meta).encode_frame()) catch {
-    err => raise IoError("failed writing READY command: \{err}")
+    _ => raise IoError("failed writing READY command")
   }
 
   let remaining : Array[DecodedItem] = []
@@ -330,7 +330,7 @@ async fn perform_plain_handshake_client(
   let client_greet = Greeting::new(mechanism="PLAIN", as_server=false).encode()
   let hello_wire = encode_plain_hello(username, password)
   conn.write(concat_bytes([client_greet, hello_wire])) catch {
-    err => raise IoError("failed writing PLAIN greeting and HELLO: \{err}")
+    _ => raise IoError("failed writing PLAIN greeting and HELLO")
   }
 
   // Read server greeting (64 bytes)
@@ -338,7 +338,7 @@ async fn perform_plain_handshake_client(
   let leftover : Array[Byte] = []
   while greet_buf.length() < 64 {
     let chunk = conn.read() catch {
-      err => raise IoError("failed reading server PLAIN greeting: \{err}")
+      _ => raise IoError("failed reading server PLAIN greeting")
     }
     match chunk {
       Some(b) => {
@@ -398,7 +398,7 @@ async fn perform_plain_handshake_client(
     }
     if !welcome_received {
       let chunk = conn.read() catch {
-        err => raise IoError("failed reading WELCOME frame: \{err}")
+        _ => raise IoError("failed reading WELCOME frame")
       }
       match chunk {
         Some(b) => {
@@ -420,7 +420,7 @@ async fn perform_plain_handshake_client(
     identity=options.identity,
   )
   conn.write(encode_plain_initiate(local_meta)) catch {
-    err => raise IoError("failed writing PLAIN INITIATE: \{err}")
+    _ => raise IoError("failed writing PLAIN INITIATE")
   }
 
   // Step 3: Wait for READY command from server
@@ -461,7 +461,7 @@ async fn perform_plain_handshake_client(
     }
     if peer_meta is None {
       let chunk = conn.read() catch {
-        err => raise IoError("failed reading READY frame: \{err}")
+        _ => raise IoError("failed reading READY frame")
       }
       match chunk {
         Some(b) => {

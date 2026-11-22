@@ -254,14 +254,14 @@ async fn perform_null_handshake(
   )
   let local_ready = ZmtpCommand::Ready(local_meta).encode_frame()
   conn.write(concat_bytes([local_greet, local_ready])) catch {
-    err => raise IoError("failed writing greeting/READY: \{err}")
+    _ => raise IoError("failed writing greeting/READY")
   }
   // Read at least 64 bytes for the peer greeting
   let greet_buf : Array[Byte] = Array(capacity=64)
   let leftover : Array[Byte] = []
   while greet_buf.length() < 64 {
     let chunk = conn.read() catch {
-      err => raise IoError("failed reading peer greeting: \{err}")
+      _ => raise IoError("failed reading peer greeting")
     }
     match chunk {
       Some(b) => {
@@ -350,7 +350,7 @@ async fn perform_null_handshake(
     }
     if peer_meta is None {
       let chunk = conn.read() catch {
-        err => raise IoError("failed reading READY frame: \{err}")
+        _ => raise IoError("failed reading READY frame")
       }
       match chunk {
         Some(b) => {
@@ -816,7 +816,7 @@ pub async fn TransportHub::bind(
   }
   let addr = parse_tcp_endpoint(endpoint, for_bind=true)
   let server = @socket.TcpServer(addr, reuse_addr=true) catch {
-    err => raise IoError("failed to bind \{endpoint}: \{err}")
+    _ => raise IoError("failed to bind \{endpoint}")
   }
   let bound_endpoint = "tcp://\{server.addr}"
   let accept_task = group.spawn(no_wait=true, allow_failure=true, () => {
