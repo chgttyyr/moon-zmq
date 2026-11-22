@@ -14,6 +14,9 @@ pub struct SocketOptions {
   mut plain_credentials : (String, String)?
   mut plain_server : Bool
   mut zap_authenticator : ((String, String) -> Bool)?
+  mut heartbeat_ivl_ms : Int32
+  mut heartbeat_timeout_ms : Int32
+  mut heartbeat_ttl_ms : Int32
 }
 
 ///|
@@ -33,6 +36,9 @@ pub fn SocketOptions::new() -> SocketOptions {
     plain_credentials: None,
     plain_server: false,
     zap_authenticator: None,
+    heartbeat_ivl_ms: 0,
+    heartbeat_timeout_ms: 0,
+    heartbeat_ttl_ms: 0,
   }
 }
 
@@ -119,6 +125,19 @@ pub fn SocketOptions::set_plain_credentials(
 ) -> Unit {
   self.plain_credentials = Some((username, password))
   self.plain_server = false
+}
+
+///|
+/// Configure ZMTP 3.1 heartbeat ping-pong interval and timeout in milliseconds.
+pub fn SocketOptions::set_heartbeat(
+  self : SocketOptions,
+  ivl_ms~ : Int32,
+  timeout_ms~ : Int32 = 0,
+  ttl_ms~ : Int32 = 0,
+) -> Unit {
+  self.heartbeat_ivl_ms = ivl_ms
+  self.heartbeat_timeout_ms = timeout_ms
+  self.heartbeat_ttl_ms = ttl_ms
 }
 
 ///|
@@ -466,6 +485,7 @@ async fn TransportHub::handle_decoded_item(
   pipe : Pipe,
   item : DecodedItem,
 ) -> Bool {
+  pipe.touch_activity()
   match item {
     CommandFrame(body) => {
       let cmd = ZmtpCommand::decode_body(body) catch { _ => return false }
@@ -673,6 +693,44 @@ async fn TransportHub::run_peer_connection(
   })
   self.tasks.push(writer_task)
 
+  let hb_task = if self.options.heartbeat_ivl_ms > 0 {
+    let ivl = self.options.heartbeat_ivl_ms
+    let timeout = if self.options.heartbeat_timeout_ms > 0 {
+      self.options.heartbeat_timeout_ms
+    } else {
+      ivl * 2
+    }
+    let ttl = if self.options.heartbeat_ttl_ms > 0 {
+      self.options.heartbeat_ttl_ms / 100
+    } else {
+      timeout / 100
+    }
+    let t = group.spawn(no_wait=true, allow_failure=true, async fn() {
+      let mut elapsed = 0
+      let step = if ivl < 20 { ivl } else { 20 }
+      while !self.closed && pipe.is_open() && !@async.is_being_cancelled() {
+        @async.sleep(step)
+        elapsed = elapsed + step
+        if pipe.check_and_clear_activity() {
+          elapsed = 0
+        } else {
+          if elapsed >= ivl {
+            let ping = ZmtpCommand::Ping(ttl, b"").encode_frame()
+            let _ = pipe.send_wire(ping, policy=DropOnFull) catch { _ => false }
+          }
+          if elapsed >= timeout {
+            pipe.close()
+            break
+          }
+        }
+      }
+    })
+    self.tasks.push(t)
+    Some(t)
+  } else {
+    None
+  }
+
   self.send_initial_subscriptions(pipe)
 
   // Process any frames that arrived coalesced with the final handshake packet
@@ -724,6 +782,10 @@ async fn TransportHub::run_peer_connection(
   }
   self.detach_pipe(pipe_id)
   writer_task.cancel()
+  match hb_task {
+    Some(t) => t.cancel()
+    None => ()
+  }
 }
 
 ///|

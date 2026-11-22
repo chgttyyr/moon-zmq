@@ -30,6 +30,7 @@ pub struct Pipe {
   mut snd_count : Int32
   mut rcv_count : Int32
   subscriptions : Array[Bytes]
+  mut active : Bool
   mut closed : Bool
 }
 
@@ -80,8 +81,23 @@ pub fn Pipe::new(
     snd_count: 0,
     rcv_count: 0,
     subscriptions: [],
+    active: true,
     closed: false,
   }
+}
+
+///|
+/// Mark this pipe as having received activity (data or command) from peer.
+pub fn Pipe::touch_activity(self : Pipe) -> Unit {
+  self.active = true
+}
+
+///|
+/// Check whether activity occurred since last check, and reset the activity flag to false.
+pub fn Pipe::check_and_clear_activity(self : Pipe) -> Bool {
+  let was_active = self.active
+  self.active = false
+  was_active
 }
 
 ///|

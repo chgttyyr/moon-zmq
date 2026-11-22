@@ -188,6 +188,17 @@ pub fn Socket::set_reconnect_interval(
 }
 
 ///|
+/// Configure ZMTP 3.1 heartbeat ping-pong interval and activity timeout in milliseconds.
+pub fn Socket::set_heartbeat(
+  self : Socket,
+  ivl_ms~ : Int32,
+  timeout_ms~ : Int32 = 0,
+  ttl_ms~ : Int32 = 0,
+) -> Unit {
+  self.options.set_heartbeat(ivl_ms~, timeout_ms~, ttl_ms~)
+}
+
+///|
 /// Configure `ZMQ_ROUTER_MANDATORY` on a `ROUTER` socket.
 pub fn Socket::set_router_mandatory(self : Socket, mandatory : Bool) -> Unit {
   self.options.set_router_mandatory(mandatory)

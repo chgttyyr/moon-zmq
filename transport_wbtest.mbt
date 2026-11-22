@@ -177,3 +177,36 @@ async test "transport automatic reconnect after server disconnect and restart" {
     server2.close()
   })
 }
+
+///|
+async test "transport zmtp 3.1 heartbeat ping-pong and timeout" {
+  @async.with_task_group(group => {
+    let server = Socket::new(Router)
+    let ep = server.bind(group, "tcp://127.0.0.1:0")
+
+    let client_opts = SocketOptions::new()
+    client_opts.set_heartbeat(ivl_ms=30, timeout_ms=90)
+    let client = Socket::new(Dealer, options=client_opts)
+    client.connect(group, ep)
+
+    while client.active_peer_count() < 1 || server.active_peer_count() < 1 {
+      @async.sleep(10)
+    }
+
+    // Message exchange
+    client.send_string("hb_hello")
+    let s_msg = server.recv()
+    assert_eq(ascii_bytes_to_string(s_msg.frames[1]), "hb_hello")
+
+    // Let heartbeat run for 100ms (multiple PING/PONG cycles)
+    @async.sleep(100)
+    assert_eq(client.active_peer_count(), 1)
+
+    // Now close server; client heartbeat will detect inactivity within timeout and drop connection
+    server.close()
+    @async.sleep(150)
+    assert_eq(client.active_peer_count(), 0)
+
+    client.close()
+  })
+}
