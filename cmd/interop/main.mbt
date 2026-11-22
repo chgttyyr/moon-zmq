@@ -330,6 +330,41 @@ async fn main {
         println("REPLY2:\{rep2.first_string()}")
         sock.close()
       }
+      "bench_echo" => {
+        let sock = ctx.socket(@moon_zmq.Rep) catch { _ => return }
+        let _ = sock.bind(group, endpoint) catch { _ => return }
+        println("READY")
+        while !sock.is_closed() {
+          let msg = sock.recv() catch { _ => break }
+          if msg.frames.length() > 0 && msg.frames[0] == b"QUIT" {
+            let _ = sock.send(@moon_zmq.Message::from_string("BYE")) catch {
+              _ => ()
+            }
+            break
+          }
+          let _ = sock.send(msg) catch { _ => break }
+        }
+        @async.sleep(20)
+        sock.close()
+      }
+      "bench_sink" => {
+        let sock = ctx.socket(@moon_zmq.Pull) catch { _ => return }
+        let _ = sock.bind(group, endpoint) catch { _ => return }
+        println("READY")
+        let total_count = if args.length() > 2 {
+          @string.parse_int(args[2]) catch {
+            _ => 1000
+          }
+        } else {
+          1000
+        }
+        for _ in 0..<total_count {
+          let _ = sock.recv() catch { _ => break }
+        }
+        println("SINK_DONE")
+        @async.sleep(20)
+        sock.close()
+      }
       _ => println("Unknown mode: \{mode}")
     }
     ctx.term()
