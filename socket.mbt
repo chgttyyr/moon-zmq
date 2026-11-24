@@ -1,14 +1,22 @@
 ///|
-/// ZeroMQ `Context` managing the lifecycle of all created `Socket` instances.
+/// ZeroMQ `Context` managing the lifecycle of all created `Socket` instances
+/// and providing an isolated `inproc://` transport namespace.
 pub struct Context {
   sockets : Array[Socket]
+  inproc : InprocRegistry
   mut closed : Bool
 }
 
 ///|
 /// Create a new ZeroMQ `Context`.
 pub fn Context::new() -> Context {
-  { sockets: [], closed: false, }
+  { sockets: [], inproc: InprocRegistry::new(), closed: false, }
+}
+
+///|
+/// Return the `InprocRegistry` isolated within this `Context`.
+pub fn Context::inproc_registry(self : Context) -> InprocRegistry {
+  self.inproc
 }
 
 ///|
@@ -21,18 +29,19 @@ pub fn Context::socket(
   if self.closed {
     raise Closed
   }
-  let sock = Socket::new(socket_type, options~)
+  let sock = Socket::new_with_inproc(socket_type, self.inproc, options~)
   self.sockets.push(sock)
   sock
 }
 
 ///|
-/// Terminate the `Context` and close all associated sockets.
+/// Terminate the `Context` and close all associated sockets and `inproc://` endpoints.
 pub fn Context::term(self : Context) -> Unit {
   if self.closed {
     return
   }
   self.closed = true
+  self.inproc.close_all()
   for s in self.sockets {
     s.close()
   }
@@ -56,6 +65,7 @@ pub struct Socket {
   socket_type : SocketType
   options : SocketOptions
   hub : TransportHub
+  inproc_registry : InprocRegistry
   priv mut req_state : ReqState
   priv mut rep_state : RepState
   mut closed : Bool
@@ -75,12 +85,23 @@ pub fn Socket::new(
   socket_type : SocketType,
   options~ : SocketOptions = SocketOptions::new(),
 ) -> Socket {
+  Socket::new_with_inproc(socket_type, default_inproc_registry, options~)
+}
+
+///|
+/// Create a `Socket` bound to a specific `InprocRegistry` namespace.
+pub fn Socket::new_with_inproc(
+  socket_type : SocketType,
+  inproc_registry : InprocRegistry,
+  options~ : SocketOptions = SocketOptions::new(),
+) -> Socket {
   let hub = TransportHub::new(socket_type, options~)
   {
     id: allocate_socket_id(),
     socket_type,
     options,
     hub,
+    inproc_registry,
     req_state: SendReady,
     rep_state: RecvReady,
     closed: false,
@@ -117,7 +138,7 @@ pub fn Socket::can_recv(self : Socket) -> Bool {
         RecvReady => self.hub.can_recv()
         _ => false
       }
-    XPub => self.hub.can_recv()
+    XPub => self.hub.pending_sub_events > 0 || self.hub.can_recv()
     _ => self.hub.can_recv()
   }
 }
@@ -231,8 +252,8 @@ pub fn Socket::set_plain_server(
 }
 
 ///|
-/// Bind a local `"tcp://host:port"` endpoint and begin accepting peers in `group`.
-/// Returns the resolved endpoint string (e.g. `"tcp://127.0.0.1:54321"`).
+/// Bind a local `"tcp://host:port"` or `"inproc://name"` endpoint and begin accepting peers in `group`.
+/// Returns the resolved endpoint string (e.g. `"tcp://127.0.0.1:54321"` or `"inproc://workers"`).
 pub async fn Socket::bind(
   self : Socket,
   group : @async.TaskGroup,
@@ -241,11 +262,15 @@ pub async fn Socket::bind(
   if self.closed {
     raise Closed
   }
+  if endpoint.has_prefix("inproc://") {
+    return self.hub.bind_inproc(group, endpoint, registry=self.inproc_registry)
+  }
   self.hub.bind(group, endpoint)
 }
 
 ///|
-/// Connect to a remote `"tcp://host:port"` endpoint in `group` with automatic reconnection.
+/// Connect to a remote `"tcp://host:port"` or `"inproc://name"` endpoint in `group`
+/// with automatic reconnection and early-connect support.
 pub fn Socket::connect(
   self : Socket,
   group : @async.TaskGroup,
@@ -253,6 +278,10 @@ pub fn Socket::connect(
 ) -> Unit raise ZmqError {
   if self.closed {
     raise Closed
+  }
+  if endpoint.has_prefix("inproc://") {
+    self.hub.connect_inproc(group, endpoint, registry=self.inproc_registry)
+    return
   }
   self.hub.connect(group, endpoint)
 }
@@ -406,14 +435,12 @@ async fn Socket::recv_internal(self : Socket) -> Message raise ZmqError {
     Router => self.hub.recv_router()
     XPub => {
       while !self.closed {
-        let event_opt = self.hub.sub_events.try_get() catch { _ => None }
-        match event_opt {
+        match self.hub.dequeue_sub_event() {
           Some(msg) => return msg
           None => ()
         }
         let _ = self.hub.inbound_notify.get() catch { _ => raise Closed }
-        let event_opt2 = self.hub.sub_events.try_get() catch { _ => None }
-        match event_opt2 {
+        match self.hub.dequeue_sub_event() {
           Some(ev) => return ev
           None => {
             let n = self.hub.pipes.length()

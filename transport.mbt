@@ -419,6 +419,7 @@ pub struct TransportHub {
   inbound_notify : @aqueue.Queue[Int32]
   pipe_ready_notify : @aqueue.Queue[Int32]
   sub_events : @aqueue.Queue[Message]
+  mut pending_sub_events : Int32
   local_subscriptions : Array[Bytes]
   topic_refcounts : Map[Bytes, Int32]
   mut reconnect_attempts : Int32
@@ -448,6 +449,7 @@ pub fn TransportHub::new(
     inbound_notify: @aqueue.Queue(kind=Unbounded),
     pipe_ready_notify: @aqueue.Queue(kind=Unbounded),
     sub_events: @aqueue.Queue(kind=Unbounded),
+    pending_sub_events: 0,
     local_subscriptions: [],
     topic_refcounts: {},
     reconnect_attempts: 0,
@@ -538,6 +540,33 @@ pub fn TransportHub::reconnect_count(self : TransportHub) -> Int32 {
 }
 
 ///|
+fn TransportHub::enqueue_sub_event(
+  self : TransportHub,
+  ev : Message,
+  pipe_id : Int32,
+) -> Unit {
+  let ok = self.sub_events.try_put(ev) catch { _ => false }
+  if ok {
+    self.pending_sub_events = self.pending_sub_events + 1
+    let _ = self.inbound_notify.try_put(pipe_id) catch { _ => false }
+  }
+}
+
+///|
+fn TransportHub::dequeue_sub_event(self : TransportHub) -> Message? {
+  let opt = self.sub_events.try_get() catch { _ => None }
+  match opt {
+    Some(ev) => {
+      if self.pending_sub_events > 0 {
+        self.pending_sub_events = self.pending_sub_events - 1
+      }
+      Some(ev)
+    }
+    None => None
+  }
+}
+
+///|
 /// Remove a closed pipe from the active pipes list and adjust its topic subscriptions.
 fn TransportHub::detach_pipe(self : TransportHub, pipe_id : Int32) -> Unit {
   let mut idx = -1
@@ -556,12 +585,10 @@ fn TransportHub::detach_pipe(self : TransportHub, pipe_id : Int32) -> Unit {
           if c <= 1 {
             self.topic_refcounts.remove(topic)
             if self.socket_type == XPub {
-              let _ = self.sub_events.try_put(
+              self.enqueue_sub_event(
                 encode_subscription_frame(false, topic),
-              ) catch {
-                _ => false
-              }
-              let _ = self.inbound_notify.try_put(pipe_id) catch { _ => false }
+                pipe_id,
+              )
             }
           } else {
             self.topic_refcounts[topic] = c - 1
@@ -617,8 +644,7 @@ async fn TransportHub::handle_decoded_item(
           }
           None =>
             if self.socket_type == XPub {
-              let _ = self.sub_events.try_put(msg) catch { _ => false }
-              let _ = self.inbound_notify.try_put(pipe.id) catch { _ => false }
+              self.enqueue_sub_event(msg, pipe.id)
               return true
             } else {
               return true
@@ -657,16 +683,10 @@ fn TransportHub::apply_peer_subscription(
       }
       self.topic_refcounts[topic] = prev + 1
       if self.socket_type == XPub && (prev == 0 || self.options.xpub_verbose) {
-        let _ = self.sub_events.try_put(encode_subscription_frame(true, topic)) catch {
-          _ => false
-        }
-        let _ = self.inbound_notify.try_put(pipe.id) catch { _ => false }
+        self.enqueue_sub_event(encode_subscription_frame(true, topic), pipe.id)
       }
     } else if self.socket_type == XPub && self.options.xpub_verbose {
-      let _ = self.sub_events.try_put(encode_subscription_frame(true, topic)) catch {
-        _ => false
-      }
-      let _ = self.inbound_notify.try_put(pipe.id) catch { _ => false }
+      self.enqueue_sub_event(encode_subscription_frame(true, topic), pipe.id)
     }
   } else {
     let removed_on_pipe = pipe.remove_subscription(topic)
@@ -676,12 +696,10 @@ fn TransportHub::apply_peer_subscription(
           if c <= 1 {
             self.topic_refcounts.remove(topic)
             if self.socket_type == XPub {
-              let _ = self.sub_events.try_put(
+              self.enqueue_sub_event(
                 encode_subscription_frame(false, topic),
-              ) catch {
-                _ => false
-              }
-              let _ = self.inbound_notify.try_put(pipe.id) catch { _ => false }
+                pipe.id,
+              )
             }
           } else {
             self.topic_refcounts[topic] = c - 1
@@ -916,6 +934,9 @@ pub async fn TransportHub::bind(
   if self.closed {
     raise Closed
   }
+  if endpoint.has_prefix("inproc://") {
+    return self.bind_inproc(group, endpoint)
+  }
   let addr = parse_tcp_endpoint(endpoint, for_bind=true)
   let server = @socket.TcpServer(addr, reuse_addr=true) catch {
     _ => raise IoError("failed to bind \{endpoint}")
@@ -952,6 +973,10 @@ pub fn TransportHub::connect(
 ) -> Unit raise ZmqError {
   if self.closed {
     raise Closed
+  }
+  if endpoint.has_prefix("inproc://") {
+    self.connect_inproc(group, endpoint)
+    return
   }
   let addr = parse_tcp_endpoint(endpoint, for_bind=false)
   let connect_task = group.spawn(no_wait=true, allow_failure=true, () => {
