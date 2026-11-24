@@ -80,6 +80,8 @@
 - **ZMTP 3.1 心跳保活与活性超时检测（`set_heartbeat`）**：支持按指定间隔发送 `PING` 命令帧，自动应答 `PONG`，并在静默超时后安全熔断连接并触发自动重连。
 - **套接字生命周期事件监听（`SocketEvent`）**：提供细粒度的事件捕获与生命周期监控（`Listening`、`Accepted`、`Connected`、`Disconnected`、`HandshakeSucceeded`、`HandshakeFailed`、`Closed`），全面支持链路健康探针与分布式可观测性诊断。
 - **实时流量指标与批量 I/O（`send_batch` / `recv_batch`）**：套接字内置收发消息数、字节数以及活跃 Peer 列表的零成本统计；提供批量消息处理接口，在高吞吐并发场景下大幅减少跨协程上下文切换。
+- **双传输层统一抽象（`tcp://` & `inproc://`）**：除跨进程原生 TCP 外，提供 `Context` 级隔离的 `inproc://` 零内核拷贝全双工内存通道，原生支持先 `connect` 后 `bind` 的延迟绑定唤醒机制。
+- **高可靠分布式模式与 CZMQ 并发引擎**：内置 RFC 7 Majordomo (`MDP/0.2`) 服务代理与 RFC 8 `MMI` 服务发现、`ReliableClient` 多端点故障转移、`Radio`/`Dish` 精确群组发布订阅、`SubscriptionTrie` / `LastValueCache` / `ConflateBuffer`、RFC 4 `ZConfig` 配置树、`ZActor` / `ZLoop` 反应器，以及 `WireDissector`、微秒级 `LatencyHistogram`、双令牌桶 `RateLimiter` 与三态 `CircuitBreaker` 熔断器。
 
 ---
 

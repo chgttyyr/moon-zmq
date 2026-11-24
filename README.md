@@ -29,25 +29,24 @@
 
 - **纯 MoonBit 原生构建**：基于现代协作式协程库 `moonbitlang/async` 编写，无 CGO、无外部动态链接库依赖。
 - **高并发全异步 I/O**：深度利用操作系统原生异步事件机制（Windows IOCP、Linux epoll、macOS kqueue），通过结构化并发 `TaskGroup` 保证连接与资源安全释放。
-- **全模式覆盖**：
-  - **REQ / REP**：严格交替状态机与空帧信封（Empty Delimiter Frame）自动化管理；
-  - **DEALER / ROUTER**：全双工并发收发与身份路由（Identity Routing），支持 `ZMQ_ROUTER_MANDATORY`；
-  - **PUB / SUB & XPUB / XSUB**：多主题前缀订阅与本地过滤，支持构建层级发布订阅代理（Broker）；
-  - **PUSH / PULL**：基于公平轮询（Round-Robin）与公平排队（Fair-Queuing）的高性能流水线分发；
-  - **PAIR**：点对点排他低开销通信。
-- **高级调度与中介组件**：
+- **双传输层引擎 (`tcp://` & `inproc://`)**：
+  - 原生支持跨进程高性能异步 `tcp://` 网络传输；
+  - 原生支持进程内零内核开销的 `inproc://` 内存通道（具备 `Context` 命名空间隔离与 ZeroMQ 标志性的 **先 `connect` 后 `bind`** 能力）。
+- **全模式与扩展原语覆盖**：
+  - **10 种标准模式**：REQ/REP、DEALER/ROUTER（含 `ZMQ_ROUTER_MANDATORY`）、PUB/SUB、XPUB/XSUB（含 `ZMQ_XPUB_VERBOSE`）、PUSH/PULL、PAIR；
+  - **Draft 精确分组模式 (`RadioSocket` / `DishSocket`)**：提供无前缀误匹配的精确群组发布订阅（`join` / `leave`）；
+  - **高可靠 RPC 与服务发现 (`ReliableClient`, `MdpBroker`)**：内置 Lazy Pirate 多端点故障转移客户端、RFC 7 Majordomo (`MDP/0.2`) 面向服务代理以及 RFC 8 `mmi.service` 服务发现在线查询。
+- **高级调度、缓存与并发原语**：
   - **RFC 43 可控消息代理 (`proxy`, `proxy_steerable`)**：支持全自动双向流量中继、旁路流量审计抓包（Capture）及控制通道动态暂停、恢复与终止（PAUSE / RESUME / TERMINATE）；
+  - **前缀字典树与最新值缓存 (`SubscriptionTrie`, `LastValueCache`, `ConflateBuffer`)**：`O(|topic|)` 多管道引用计数订阅树、LVC 晚加入重放代理（`run_lvc_proxy`）以及 `ZMQ_CONFLATE` 最新状态合并缓冲；
+  - **CZMQ 并发与配置模型 (`ZActor`, `ZLoop`, `ZConfig`)**：支持 RFC 4 ZPL 层级配置解析/序列化、`inproc://` Actor 协程通信以及融合定时器与 Poller 的 `ZLoop` 事件反应器；
   - **I/O 多路复用调度器 (`Poller`)**：在单协程内统一轮询多套接字，非阻塞探测 `POLLIN` / `POLLOUT` / `POLLERR`；
-  - **套接字生命周期监听 (`SocketEvent` & `monitor_events`)**：对标官方 `zmq_socket_monitor`，捕获 `Listening`、`Connected`、`Accepted`、`HandshakeSucceeded`、`Disconnected`、`Closed` 事件；
-  - **生产级批量与遥测支持**：提供 `send_batch` 与 `recv_batch` 批量收发，内置实时流量指标（`messages_sent`, `bytes_sent`, `messages_received`, `bytes_received`）；
+  - **可观测性、限流与熔断诊断 (`SocketEvent`, `WireDissector`, `LatencyHistogram`, `RateLimiter`, `CircuitBreaker`)**：捕获全生命周期连接事件，内置 ZMTP 报文解剖器、微秒级分位数直方图、双令牌桶流量整形与三态故障熔断器；
   - **ZMTP 3.1 心跳检测 (`set_heartbeat`)**：支持定时 PING 探测、对端自动 PONG 响应与静默失活自动断连重连。
-- **企业级连接管理**：
-  - 自动重连机制（支持可配置的初始重连间隔与指数退避上限）；
-  - 高水位标记（`sndhwm` / `rcvhwm`）反压队列与丢弃策略；
-  - 动态多连接管理与管道隔离。
-- **完备的安全性**：
-  - 支持 RFC 23 NULL 机制；
-  - 支持 RFC 24 PLAIN 机制，含服务端可配置的 ZAP（ZeroMQ Authentication Protocol）认证处理器。
+- **完备的安全认证与编码体系**：
+  - 支持 RFC 23 NULL 机制与 RFC 24 PLAIN 机制；
+  - 完整实现 **RFC 27 ZAP 1.0** 认证协议（`inproc://zeromq.zap.01` 异步鉴权服务、IPv4 CIDR 黑白名单、多域用户凭据库与审计日志）；
+  - 完整实现 **RFC 32 Z85** 二进制/文本编码器与 `WireReader` / `WireWriter` 网络字节序游标。
 
 ---
 
@@ -282,7 +281,7 @@ Ran 18 tests in 6.678s
 OK (18 passed, 0 failed)
 ```
 
-- **MoonBit 单元/状态机/属性/边界测试**：42/42 测试通过。
+- **MoonBit 单元/状态机/属性/企业特性/边界测试**：52/52 测试通过。
 - **官方 libzmq 双向互通与基准测试**：20/20 测试通过。
 
 ---
@@ -317,7 +316,7 @@ OK (18 passed, 0 failed)
 
 ## 运行示例工程
 
-仓库的 `examples/` 目录提供了 7 个开箱即用的完整独立示例工程：
+仓库的 `examples/` 目录提供了 8 个开箱即用的完整独立示例工程：
 
 ```bash
 # 1. 运行请求应答示例 (REQ / REP)
@@ -340,6 +339,9 @@ moon -C examples/poller_multiplex run . --target native
 
 # 7. 运行套接字生命周期监听与流量度量示例 (Socket Monitor)
 moon -C examples/socket_monitor run . --target native
+
+# 8. 运行进程内零拷贝通信、ZActor、RFC 4 配置与 Radio/Dish 示例 (Inproc Actor)
+moon -C examples/inproc_actor run . --target native
 ```
 
 ---
@@ -353,15 +355,21 @@ moon -C examples/socket_monitor run . --target native
   - [x] 10 种标准 Socket 模式（REQ/REP、PUB/SUB、XPUB/XSUB、PUSH/PULL、DEALER/ROUTER、PAIR）；
   - [x] 官方 libzmq (pyzmq) 双向互通自动化测试体系；
   - [x] 4 大基础可执行示例工程。
-- **v0.2.0 (当前重大升级版本)**：
+- **v0.2.0 (已完成发布)**：
   - [x] RFC 43 可控消息代理与抓包转发器（`proxy`, `proxy_steerable`）；
   - [x] 基于 `Poller` 的多 Socket 统一异步 I/O 事件多路复用调度器；
   - [x] 套接字生命周期事件监听 (`SocketEvent` & `monitor_events`，对标 `zmq_socket_monitor`)；
   - [x] 批量收发 (`send_batch`, `recv_batch`) 与运行时实时流量统计指标；
   - [x] ZMTP 3.1 心跳检测（PING/PONG 周期探测与静默超时自动重连）；
-  - [x] 完备的基准性能测试套件（吞吐率达 47,000+ msg/s，RPC 往返延迟达 0.10 ms）；
-  - [x] 边界异常防御与故障注入测试套件（恶意包嗅探、高并发快速连接抖动防护）；
-  - [x] 新增 3 大高级架构示例工程（`proxy_broker`, `poller_multiplex`, `socket_monitor`）。
+  - [x] 完备的基准性能测试套件与边界故障注入测试套件。
+- **v0.3.0 (当前重大架构升级版本)**：
+  - [x] 进程内零拷贝内存传输层 `inproc://`（支持 `Context` 隔离与先 `connect` 后 `bind`）；
+  - [x] RFC 27 ZAP 1.0 完整认证服务引擎、IPv4 CIDR 访问控制与多域凭据审计；
+  - [x] RFC 32 Z85 编码器与二进制网络游标 (`WireReader` / `WireWriter`)；
+  - [x] RFC 7 Majordomo (`MDP/0.2`) 服务代理、RFC 8 `MMI` 服务发现、`ReliableClient` 故障转移客户端与 `Radio`/`Dish` 精确群组通信；
+  - [x] `SubscriptionTrie` 前缀字典树、`LastValueCache` (LVC) 重放代理与 `ConflateBuffer` 状态合并；
+  - [x] RFC 4 ZPL 配置解析引擎 (`ZConfig`)、CZMQ `ZActor` 并发模型与 `ZLoop` 定时器反应器；
+  - [x] 报文协议解剖器 (`WireDissector`)、分位数直方图 (`LatencyHistogram`)、双令牌桶限流 (`RateLimiter`) 与三态熔断器 (`CircuitBreaker`)。
 - **v1.0.0 (长期演进)**：
   - [ ] 待 MoonBit 生态正式发布经过审计的 Curve25519 库后，支持 RFC 25 CURVE 加密认证；
   - [ ] IPC (`ipc://`) 本地命名管道与域套接字通信支持；

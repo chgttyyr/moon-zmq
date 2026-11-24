@@ -63,6 +63,9 @@ jobs:
       - name: Run Socket Monitor Example
         run: moon -C examples/socket_monitor run . --target native
 
+      - name: Run Inproc Actor & Radio/Dish Example
+        run: moon -C examples/inproc_actor run . --target native
+
       - name: Run pyzmq (libzmq) Bidirectional Interoperability Test Suite
         run: python -m unittest -v tests/interop/test_interop.py
 

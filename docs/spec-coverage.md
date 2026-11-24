@@ -8,19 +8,23 @@
 
 | 规范编号 | 规范名称 | 覆盖状态 | 说明 |
 | :--- | :--- | :---: | :--- |
+| **RFC 4** | ZPL（ZeroMQ 属性配置语言） | **已完成** | 完整实现 4 空格层级解析、序列化以及与 `SocketOptions` 的双向映射 (`ZConfig`)。 |
+| **RFC 7** | Majordomo 面向服务消息代理协议 (`MDP/0.2`) | **已完成** | 完整实现 `MDPC02`/`MDPW02` 编解码、LRU 工作节点均衡调度、请求排队与心跳失活驱逐 (`MdpBroker`)。 |
+| **RFC 8** | Majordomo 管理接口 (`MMI`) | **已完成** | 内置 `mmi.service` 在线服务发现查询（返回 `200` / `404` / `501`）。 |
 | **RFC 23** | ZMTP 3.1（ZeroMQ 消息传输协议核心） | **已完成** | 完整支持帧格式、版本协商、NULL 机制、命令帧、大消息与元数据交互。 |
 | **RFC 24** | PLAIN 安全机制 | **已完成** | 完整支持客户端/服务端 HELLO / WELCOME / INITIATE 握手及 ZAP 认证回调。 |
-| **RFC 25** | CURVE 安全机制 | **不做** | 经深度调研，MoonBit 生态目前暂未提供经过安全审计的 Curve25519 与 XSalsa20-Poly1305 官方密码学库。遵循密码工程与安全规范，本库不临时自制拼凑非标准密码实现；架构层已预留安全机制扩展槽。 |
-| **RFC 28** | REQ / REP 请求应答模式 | **已完成** | 严格交替状态机校验、请求应答空帧信封（Empty Delimiter）自动封装与解包。 |
-| **RFC 29** | PUB / SUB 发布订阅模式 | **已完成** | 支持多主题订阅、取消订阅、前缀匹配过滤与多端点广播投递。 |
+| **RFC 25** | CURVE 安全机制 | **不做** | 经深度调研，MoonBit 生态目前暂未提供经过安全审计的 Curve25519 与 XSalsa20-Poly1305 官方密码学库。遵循密码工程与安全规范，本库不临时自制拼凑非标准密码实现；架构层及 ZAP 已预留安全机制扩展槽。 |
+| **RFC 27** | ZAP 1.0（ZeroMQ 认证协议） | **已完成** | 完整支持 7 帧请求 / 6 帧应答协议、`inproc://zeromq.zap.01` 异步服务、IPv4 CIDR 策略、元数据注入与审计日志 (`ZapPolicyEngine`)。 |
+| **RFC 28** | REQ / REP 请求应答模式 | **已完成** | 严格交替状态机校验、请求应答空帧信封（Empty Delimiter）自动封装与解包，含 Lazy Pirate 多端点故障转移客户端 (`ReliableClient`)。 |
+| **RFC 29** | PUB / SUB 发布订阅模式 | **已完成** | 支持多主题订阅、取消订阅、`O(|topic|)` 前缀字典树 (`SubscriptionTrie`) 与 `ZMQ_CONFLATE` 最新值合并。 |
 | **RFC 30** | PIPELINE（PUSH / PULL）管道模式 | **已完成** | 支持 PUSH 端公平轮询（Round-Robin）分发与 PULL 端公平接收（Fair-Queuing）。 |
-| **RFC 31** | ROUTER 套接字模式 | **已完成** | 异步多路复用、源节点 Identity 信封自动前缀附加、目标寻址投递与强制路由模式。 |
-| **RFC 32** | DEALER 套接字模式 | **已完成** | 全双工异步点对点轮询负载分发与接收。 |
-| **RFC 43** | ZeroMQ 可控代理与转发中介（Steerable Proxy） | **已完成** | 完整支持双向消息中继、可选流量审计旁路（Capture）及控制通道动态暂停/恢复/终止（PAUSE/RESUME/TERMINATE）。 |
-| **RFC 47** | XPUB / XSUB 扩展发布订阅模式 | **已完成** | 支持订阅/取消订阅消息向上游透明转发，满足构建发布订阅代理（Proxy/Broker）需求。 |
+| **RFC 31** | ROUTER / DEALER 异步路由模式 | **已完成** | 异步多路复用、源节点 Identity 信封自动前缀附加、目标寻址投递与强制路由模式。 |
+| **RFC 32** | Z85 二进制文本编码规范 | **已完成** | 完整实现 85 字符表编解码、32 位溢出校验与任意长度填充编解码 (`z85_encode` / `z85_decode`)。 |
 | **RFC 37** | ZMTP 心跳保活机制（Heartbeating） | **已完成** | 支持可配置心跳周期（`heartbeat_ivl`）、活性超时（`heartbeat_timeout`）、PING/PONG 自动应答与静默超时自动重连。 |
-| **N/A** | Poller 多路事件复用调度器 | **已完成** | 统一管理多套接字，非阻塞轮询与超时等待（POLLIN / POLLOUT / POLLERR）。 |
-| **N/A** | PAIR 点对点独占模式 | **已完成** | 独占双向通道，无额外信封与多路路由开销。 |
+| **RFC 43** | ZeroMQ 可控代理与转发中介（Steerable Proxy） | **已完成** | 完整支持双向消息中继、可选流量审计旁路（Capture）及控制通道动态暂停/恢复/终止（PAUSE/RESUME/TERMINATE）。 |
+| **RFC 47** | XPUB / XSUB 扩展发布订阅与 LVC 缓存代理 | **已完成** | 支持订阅/取消订阅消息向上游透明转发及最新值缓存代理 (`LastValueCache` / `run_lvc_proxy`)。 |
+| **Draft** | RADIO / DISH 精确分组发布订阅 | **已完成** | 精确群组名匹配、动态加退群（`join` / `leave`），彻底避免前缀误匹配。 |
+| **CZMQ** | `inproc://` 零拷贝传输、`ZActor` 与 `ZLoop` | **已完成** | 支持 `Context` 隔离的进程内通道（含先 `connect` 后 `bind`）、Actor 协程管道与定时器事件反应器。 |
 
 ---
 

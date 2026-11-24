@@ -1,0 +1,8 @@
+import {
+  "chgttyyr/moon_zmq",
+  "moonbitlang/core/async",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
